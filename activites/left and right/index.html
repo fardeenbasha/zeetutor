@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="te">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dikku lu Nerchukundam - Live Tutor App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <!-- ============================================================
+         PART 1 — LIVETUTOR SYNC BLOCK (THE GOLDEN RULES)
+         ============================================================ -->
+    <script>
+        window.isSimulating = false;
+        const urlParams = new URLSearchParams(window.location.search || window.location.hash.replace('#','?'));
+        const roomId = urlParams.get('room') || '54321';
+        let localSeed = 0;
+        
+        window.setSeed = function(str) {
+            let tempSeed = 0;
+            for (let i = 0; i < str.length; i++) { tempSeed = str.charCodeAt(i) + ((tempSeed << 5) - tempSeed); }
+            localSeed = Math.abs(tempSeed);
+        };
+        window.setSeed(roomId);
+        
+        window.seededRandom = function() {
+            let x = Math.sin(localSeed++) * 10000;
+            return x - Math.floor(x);
+        };
+        Math.random = window.seededRandom;
+
+        function getUniqueSelector(el) {
+            if (!el) return null;
+            if (el.id) return '#' + el.id;
+            if (el === document.body) return 'body';
+            let path = [];
+            while (el && el.nodeType === Node.ELEMENT_NODE) {
+                let selector = el.nodeName.toLowerCase();
+                if (el.id) { selector = '#' + el.id; path.unshift(selector); break; } 
+                else {
+                    if (el.className && typeof el.className === 'string') {
+                        const classes = Array.from(el.classList).filter(c => !c.includes(':') && !c.includes('[') && !c.includes('/')).join('.');
+                        if (classes) selector += '.' + classes;
+                    }
+                    let sibling = el, nth = 1;
+                    while (sibling = sibling.previousElementSibling) { if (sibling.nodeName.toLowerCase() === el.nodeName.toLowerCase()) nth++; }
+                    selector += ':nth-of-type(' + nth + ')';
+                    path.unshift(selector);
+                }
+                el = el.parentNode;
+            }
+            return path.join(' > ');
+        }
+
+        let actionIdCounter = 0;
+        document.addEventListener('click', (e) => {
+            if (e.isTrusted === false || window.isSimulating) return;
+            const selector = getUniqueSelector(e.target); if (!selector) return;
+            actionIdCounter++;
+            window.parent.postMessage({
+                type: 'IFRAME_ACTION_TRIGGERED',
+                payload: { type: 'UNIVERSAL_CLICK', selector: selector, seed: localSeed, actionId: 'click_' + actionIdCounter + '_' + Date.now() }
+            }, '*');
+        }, true);
+
+        let lastCursorTime = 0;
+        document.addEventListener('mousemove', (e) => {
+            const now = Date.now(); if (now - lastCursorTime < 40) return; lastCursorTime = now;
+            window.parent.postMessage({ type: 'IFRAME_ACTION_TRIGGERED', payload: { type: 'UNIVERSAL_CURSOR', pctX: (e.clientX / window.innerWidth) * 100, pctY: (e.clientY / window.innerHeight) * 100 } }, '*');
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+                const now = Date.now(); if (now - lastCursorTime < 40) return; lastCursorTime = now;
+                window.parent.postMessage({ type: 'IFRAME_ACTION_TRIGGERED', payload: { type: 'UNIVERSAL_CURSOR', pctX: (e.touches[0].clientX / window.innerWidth) * 100, pctY: (e.touches[0].clientY / window.innerHeight) * 100 } }, '*');
+            }
+        }, { passive: true });
+
+        let lastProcessedActionId = null;
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'EXECUTE_UNIVERSAL_ACTION') {
+                const action = event.data.action;
+                if (action.type === 'UNIVERSAL_CURSOR') {
+                    const c = document.getElementById('remote-cursor');
+                    if (c) {
+                        c.style.left = (action.pctX / 100 * window.innerWidth) + 'px';
+                        c.style.top = (action.pctY / 100 * window.innerHeight) + 'px';
+                        c.style.display = 'block';
+                    }
+                    return;
+                }
+                const currentActionId = action.actionId || action.timestamp;
+                if (currentActionId && currentActionId === lastProcessedActionId) return;
+                lastProcessedActionId = currentActionId;
+
+                window.isSimulating = true;
+                if (action.seed !== undefined) window.setSeed(action.seed.toString());
+                
+                if (action.type === 'UNIVERSAL_CLICK') {
+                    const element = document.querySelector(action.selector);
+                    if (element) element.click();
+                } 
+                // Custom Drag & Drop Sync handler
+                else if (action.type === 'FIT_ARROW') {
+                    if (window.handleDropAttempt) {
+                        window.handleDropAttempt(action.sourceDir, action.dropZoneId, true);
+                    }
+                }
+
+                setTimeout(() => { window.isSimulating = false; }, 50);
+            }
+        });
+
+        // Safe Shuffler using Seeded Random
+        function shuf(arr) {
+            arr = [...arr];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(window.seededRandom() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+    </script>
+
+    <style>
+        /* ============================================================
+           PART 2 — CSS & GOLDEN LAYOUT BOUNDS
+           ============================================================ */
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700;800;900&display=swap');
+
+        html, body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            background-color: #f3f4f6;
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden; touch-action: none;
+            font-family: 'Nunito', sans-serif;
+            -webkit-user-drag: none; user-select: none;
+        }
+
+        /* Protect IDs for syncing - Mukhya Niyamam! */
+        button *, .card-btn *, .drag-item * { pointer-events: none; }
+
+        /* The App Wrapper */
+        #app-wrapper {
+            width: 95vw; height: 95vh;
+            max-width: 900px; max-height: 720px;
+            background-color: #ffffff;
+            border-radius: 1rem; border: 4px solid white;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            display: flex; flex-direction: column;
+            overflow: hidden; position: relative;
+        }
+
+        /* Scroll Isolation */
+        .game-canvas {
+            flex: 1; overflow-y: auto; overflow-x: hidden;
+            position: relative; padding: 1.5rem;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: flex-start;
+        }
+
+        /* Pinned Bottom Bank */
+        .number-bank {
+            flex-shrink: 0; min-height: 100px;
+            background-color: #f8fafc; border-top: 3px solid #e2e8f0;
+            display: flex; justify-content: center; align-items: center;
+            gap: 1rem; padding: 1rem; z-index: 10;
+        }
+
+        .card-btn { transition: all 0.2s ease; cursor: pointer; max-width: 100%; }
+        .card-btn:active { transform: scale(0.95); }
+
+        .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Drag & Drop utilities */
+        .drop-zone { border: 3px dashed #cbd5e1; transition: all 0.2s ease; aspect-ratio: 1; max-width: 130px; width: 100%; }
+        .drop-zone.active { border-color: #3b82f6; background-color: #eff6ff; }
+        .drag-item { cursor: grab; touch-action: none; width: 64px; height: 64px; flex-shrink: 0; }
+        .drag-item:active { cursor: grabbing; }
+        .dragging-clone { position: fixed; pointer-events: none; z-index: 9999; opacity: 0.9; transform: scale(1.1); }
+    </style>
+</head>
+<body>
+
+    <!-- MANDATORY RED CURSOR -->
+    <div id="remote-cursor" style="position:fixed; width:18px; height:18px; background:red; border-radius:50%; border:3px solid white; box-shadow:0 0 10px rgba(255,0,0,.6); pointer-events:none; z-index:99999; transform:translate(-50%,-50%); display:none;"></div>
+
+    <!-- Main App Wrapper -->
+    <div id="app-wrapper">
+        <header class="bg-indigo-600 text-white p-4 flex justify-between items-center shadow-md flex-shrink-0 z-20">
+            <h1 class="text-xl font-bold flex items-center gap-2" id="header-title">
+                <i data-lucide="compass"></i> Dikku lu Nerchukundam
+            </h1>
+            <div class="flex gap-2">
+                <button id="btn-home" onclick="renderHome()" class="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-lg text-sm font-bold transition-colors flex items-center gap-1 hidden shadow-md">
+                    <i data-lucide="home" class="w-4 h-4"></i> Intiki
+                </button>
+            </div>
+        </header>
+
+        <div id="game-canvas" class="game-canvas">
+            <!-- Screen Content will be injected here -->
+        </div>
+
+        <div id="number-bank" class="number-bank hidden">
+            <!-- Draggable items will be injected here -->
+        </div>
+        
+        <div id="success-overlay" class="absolute inset-0 bg-white/95 z-50 hidden flex-col items-center justify-center pop-in">
+            <div class="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center text-white mb-4 shadow-xl">
+                <i data-lucide="check" class="w-12 h-12"></i>
+            </div>
+            <h2 class="text-3xl font-bold text-gray-800 mb-2">Chala Bagundi!</h2>
+            <button id="btn-next" class="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-md active:scale-95 transition-transform">
+                Munduku
+            </button>
+        </div>
+
+        <!-- Success Audio -->
+        <audio id="success-sfx" src="https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3" preload="auto"></audio>
+    </div>
+
+    <!-- ============================================================
+         PART 3 — GAME LOGIC
+         ============================================================ -->
+    <script>
+        const AppState = {
+            currentScreen: 'home',
+            selectedDirection: null,
+            locked: false
+        };
+
+        // Dikku lu (Directions)
+        const DIRECTIONS = {
+            'up': { icon: 'arrow-up', color: 'bg-blue-500', text: 'Paina' },
+            'down': { icon: 'arrow-down', color: 'bg-green-500', text: 'Kinda' },
+            'left': { icon: 'arrow-left', color: 'bg-orange-500', text: 'Yedama' },
+            'right': { icon: 'arrow-right', color: 'bg-purple-500', text: 'Kudi' }
+        };
+
+        const canvas = document.getElementById('game-canvas');
+        const bank = document.getElementById('number-bank');
+        const btnHome = document.getElementById('btn-home');
+        const overlay = document.getElementById('success-overlay');
+        const successSfx = document.getElementById('success-sfx');
+
+        // Main Initialize
+        function initApp() {
+            document.getElementById('btn-next').addEventListener('click', () => {
+                if (window.isSimulating) return;
+                overlay.classList.add('hidden');
+                successSfx.pause(); successSfx.currentTime = 0;
+                
+                // Return to appropriate screen
+                if (AppState.currentScreen === 'drag_drop') renderHome();
+                else renderSubMenu(AppState.selectedDirection);
+            });
+            renderHome();
+        }
+
+        // Global cleanup for drag ghost
+        let activeDragClone = null;
+        function clearDragGhost() {
+            if (activeDragClone) {
+                activeDragClone.remove();
+                activeDragClone = null;
+            }
+        }
+
+        // Home Screen
+        window.renderHome = function() {
+            if (window.isSimulating) return;
+            clearDragGhost();
+            
+            AppState.currentScreen = 'home';
+            AppState.selectedDirection = null;
+            AppState.locked = false;
+            
+            btnHome.classList.add('hidden');
+            bank.classList.add('hidden');
+            document.getElementById('header-title').innerHTML = `<i data-lucide="compass"></i> Dikku lu Nerchukundam`;
+
+            let html = `
+                <div class="text-center mb-8 mt-4 w-full">
+                    <h2 class="text-2xl font-bold text-gray-700">Oka dikku nu enchukondi</h2>
+                </div>
+                <div class="grid grid-cols-2 gap-6 max-w-lg mx-auto w-full mb-8">
+            `;
+            Object.keys(DIRECTIONS).forEach(dir => {
+                const data = DIRECTIONS[dir];
+                html += `
+                    <button id="menu-${dir}" onclick="renderSubMenu('${dir}')" class="card-btn flex flex-col items-center justify-center p-6 bg-white rounded-2xl shadow-lg border-2 border-gray-100 hover:border-gray-300 transition-all aspect-square sm:aspect-auto sm:h-36">
+                        <div class="w-16 h-16 rounded-full ${data.color} flex items-center justify-center text-white mb-3 shadow-md">
+                            <i data-lucide="${data.icon}" class="w-10 h-10"></i>
+                        </div>
+                        <span class="text-xl font-bold text-gray-800">${data.text}</span>
+                    </button>
+                `;
+            });
+            html += `</div>
+                <div class="max-w-lg mx-auto w-full border-t-2 border-gray-200 pt-6 pb-10">
+                    <button id="menu-dragdrop" onclick="renderDragDrop()" class="card-btn w-full flex items-center justify-center gap-4 p-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl shadow-lg">
+                        <i data-lucide="blocks" class="w-8 h-8"></i>
+                        <span class="text-xl font-bold">Arrows nu Fit Cheyandi</span>
+                    </button>
+                </div>
+            `;
+            canvas.innerHTML = html; lucide.createIcons();
+        }
+
+        // Sub Menu (Activities)
+        window.renderSubMenu = function(dir) {
+            if (window.isSimulating) return;
+            clearDragGhost();
+
+            AppState.currentScreen = 'submenu';
+            AppState.selectedDirection = dir;
+            AppState.locked = false;
+            
+            btnHome.classList.remove('hidden');
+            bank.classList.add('hidden');
+            
+            const data = DIRECTIONS[dir];
+            document.getElementById('header-title').innerHTML = `<i data-lucide="${data.icon}"></i> ${data.text} Dikku`;
+
+            canvas.innerHTML = `
+                <div class="text-center mb-10 mt-6 flex flex-col items-center w-full">
+                    <div class="w-20 h-20 rounded-full ${data.color} flex items-center justify-center text-white mb-4 shadow-lg pop-in">
+                        <i data-lucide="${data.icon}" class="w-12 h-12"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-700">Emi cheddam?</h2>
+                </div>
+                <div class="flex flex-col gap-6 max-w-md mx-auto w-full pb-10">
+                    <button id="task-odd-${dir}" onclick="renderOddOneOut('${dir}')" class="card-btn flex items-center p-6 bg-white rounded-2xl shadow-md border border-gray-200">
+                        <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mr-4 shrink-0"><i data-lucide="scan-line"></i></div>
+                        <div class="text-left"><h3 class="text-xl font-bold text-gray-800">Veru ga unnadhi edi?</h3><p class="text-gray-500 text-sm">Different arrow nu touch cheyandi</p></div>
+                    </button>
+                    <button id="task-color-${dir}" onclick="renderColorTask('${dir}')" class="card-btn flex items-center p-6 bg-white rounded-2xl shadow-md border border-gray-200">
+                        <div class="w-12 h-12 rounded-full bg-yellow-100 text-yellow-500 flex items-center justify-center mr-4 shrink-0"><i data-lucide="palette"></i></div>
+                        <div class="text-left"><h3 class="text-xl font-bold text-gray-800">Rangu Veyandi</h3><p class="text-gray-500 text-sm">${data.text} arrow nu paint cheyandi</p></div>
+                    </button>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        // ----------------------------------------------------
+        // TASK 1: Odd One Out (3x3 Grid Fix)
+        // ----------------------------------------------------
+        window.renderOddOneOut = function(dir) {
+            AppState.currentScreen = 'odd_out'; 
+            AppState.locked = false;
+            window.setSeed(roomId + "_odd_" + dir + "_" + Date.now()); 
+            
+            document.getElementById('header-title').innerHTML = `Veru ga unnadhi edi?`;
+            const opposites = { 'up':'down', 'down':'up', 'left':'right', 'right':'left' };
+            const oddDir = opposites[dir];
+            
+            // Generate 9 items: 8 regular, 1 odd
+            let items = Array(8).fill(dir);
+            items.push(oddDir);
+            items = shuf(items);
+
+            let html = `
+                <div class="text-center mb-6 mt-2 w-full"><h2 class="text-xl font-bold text-gray-700">Veru ga unna arrow nu kanugondni!</h2></div>
+                <div class="grid grid-cols-3 gap-4 max-w-md mx-auto w-full pb-10">
+            `;
+            items.forEach((itemDir, index) => {
+                html += `
+                    <button id="odd-card-${index}" onclick="handleOddClick(this, ${itemDir === oddDir})" class="card-btn aspect-square bg-white rounded-2xl shadow-lg border-4 border-gray-100 flex items-center justify-center transition-colors">
+                        <i data-lucide="${DIRECTIONS[itemDir].icon}" class="w-12 h-12 sm:w-16 sm:h-16 text-gray-700"></i>
+                    </button>
+                `;
+            });
+            html += `</div>`;
+            canvas.innerHTML = html; lucide.createIcons();
+        }
+
+        window.handleOddClick = function(el, isCorrect) {
+            if (AppState.locked) return;
+            if (isCorrect) {
+                AppState.locked = true;
+                el.classList.replace('border-gray-100', 'border-green-500');
+                el.classList.add('bg-green-50');
+                el.querySelector('i').classList.replace('text-gray-700', 'text-green-600');
+                setTimeout(showSuccess, 600);
+            } else {
+                el.classList.add('shake', 'border-red-400', 'bg-red-50');
+                el.querySelector('i').classList.replace('text-gray-700', 'text-red-500');
+                setTimeout(() => {
+                    el.classList.remove('shake', 'border-red-400', 'bg-red-50');
+                    el.querySelector('i').classList.replace('text-red-500', 'text-gray-700');
+                }, 500);
+            }
+        };
+
+        // ----------------------------------------------------
+        // TASK 2: Color the Arrow
+        // ----------------------------------------------------
+        window.renderColorTask = function(targetDir) {
+            AppState.currentScreen = 'color_task'; 
+            AppState.locked = false;
+            window.setSeed(roomId + "_color_" + targetDir + "_" + Date.now());
+
+            const targetData = DIRECTIONS[targetDir];
+            document.getElementById('header-title').innerHTML = `Arrow ki rangu veyandi!`;
+
+            let html = `
+                <div class="text-center mb-6 mt-2 w-full"><h2 class="text-xl font-bold text-gray-700">Anni <span class="${targetData.color.replace('bg-', 'text-')}">${targetData.text}</span> arrows nu rangu veyandi!</h2></div>
+                <div class="grid grid-cols-3 gap-4 max-w-lg mx-auto w-full pb-10" id="color-grid">
+            `;
+            const allDirs = Object.keys(DIRECTIONS);
+            let gridItems = shuf([targetDir, targetDir, targetDir, ...Array.from({length:6}, () => allDirs[Math.floor(seededRandom() * allDirs.length)])]);
+
+            window.colorTaskState = { targetCount: gridItems.filter(d => d === targetDir).length, foundCount: 0, colorClass: targetData.color };
+
+            gridItems.forEach((dir, index) => {
+                html += `
+                    <button id="color-item-${index}" data-dir="${dir}" onclick="handleColorClick(this, '${dir}', '${targetDir}')" class="card-btn aspect-square bg-gray-200 rounded-xl shadow-inner flex items-center justify-center transition-all duration-300 border-4 border-transparent">
+                        <i data-lucide="${DIRECTIONS[dir].icon}" class="w-10 h-10 sm:w-12 sm:h-12 text-gray-400"></i>
+                    </button>
+                `;
+            });
+            html += `</div>`;
+            canvas.innerHTML = html; lucide.createIcons();
+        }
+
+        window.handleColorClick = function(el, itemDir, targetDir) {
+            if (AppState.locked || el.classList.contains('colored')) return;
+            if (itemDir === targetDir) {
+                el.classList.remove('bg-gray-200', 'shadow-inner');
+                el.classList.add(window.colorTaskState.colorClass, 'shadow-lg', 'colored', 'pop-in');
+                el.querySelector('i').classList.replace('text-gray-400', 'text-white');
+                window.colorTaskState.foundCount++;
+                if (window.colorTaskState.foundCount === window.colorTaskState.targetCount) {
+                    AppState.locked = true;
+                    setTimeout(showSuccess, 800);
+                }
+            } else {
+                el.classList.add('shake', 'border-red-400');
+                setTimeout(() => el.classList.remove('shake', 'border-red-400'), 400);
+            }
+        };
+
+        // ----------------------------------------------------
+        // TASK 3: Drag & Drop (Fit Arrows)
+        // ----------------------------------------------------
+        window.renderDragDrop = function() {
+            AppState.currentScreen = 'drag_drop'; 
+            AppState.locked = false;
+            
+            btnHome.classList.remove('hidden');
+            bank.classList.remove('hidden');
+            document.getElementById('header-title').innerHTML = `Sariyaina chota pettandi`;
+
+            let topHtml = `
+                <div class="text-center mb-6 w-full"><p class="text-gray-500 font-bold">Kinda unna arrows nu lakkocchi sariyaina chota pettandi.</p></div>
+                <div class="grid grid-cols-2 gap-6 sm:gap-8 max-w-md mx-auto w-full pb-6">
+            `;
+            Object.keys(DIRECTIONS).forEach(dir => {
+                topHtml += `
+                    <div id="drop-${dir}" data-target-dir="${dir}" class="drop-zone rounded-2xl flex flex-col items-center justify-center relative bg-gray-50">
+                        <i data-lucide="${DIRECTIONS[dir].icon}" class="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 absolute opacity-50"></i>
+                    </div>
+                `;
+            });
+            topHtml += `</div>`;
+            canvas.innerHTML = topHtml;
+
+            window.setSeed(roomId + "_drag_" + Date.now());
+            let bankHtml = '';
+            shuf(Object.keys(DIRECTIONS)).forEach(dir => {
+                const data = DIRECTIONS[dir];
+                bankHtml += `
+                    <div id="drag-${dir}" data-dir="${dir}" class="drag-item rounded-xl ${data.color} shadow-lg flex items-center justify-center text-white z-20">
+                        <i data-lucide="${data.icon}" class="w-8 h-8 sm:w-10 sm:h-10"></i>
+                    </div>
+                `;
+            });
+            bank.innerHTML = bankHtml; lucide.createIcons();
+            
+            window.dragMatchCount = 0; // RESET MATCH COUNT FOR NEW ROUND
+            initDragDropSyncLogic();
+        }
+
+        function initDragDropSyncLogic() {
+            const dragItems = document.querySelectorAll('.drag-item');
+            const dropZones = document.querySelectorAll('.drop-zone');
+
+            let activeItem = null, startX, startY;
+
+            dragItems.forEach(item => {
+                item.addEventListener('pointerdown', (e) => {
+                    if (AppState.locked || window.isSimulating) return;
+                    e.preventDefault();
+                    activeItem = item;
+                    const rect = activeItem.getBoundingClientRect();
+                    activeDragClone = activeItem.cloneNode(true);
+                    activeDragClone.classList.add('dragging-clone');
+                    activeDragClone.style.left = `${rect.left}px`;
+                    activeDragClone.style.top = `${rect.top}px`;
+                    activeDragClone.style.width = `${rect.width}px`;
+                    activeDragClone.style.height = `${rect.height}px`;
+                    document.body.appendChild(activeDragClone);
+                    
+                    activeItem.style.opacity = '0.3';
+                    startX = e.clientX - rect.left;
+                    startY = e.clientY - rect.top;
+                    
+                    document.addEventListener('pointermove', onPointerMove);
+                    document.addEventListener('pointerup', onPointerUp);
+                });
+            });
+
+            function onPointerMove(e) {
+                if (!activeDragClone) return; e.preventDefault();
+                activeDragClone.style.left = `${e.clientX - startX}px`;
+                activeDragClone.style.top = `${e.clientY - startY}px`;
+                
+                // Highlight logic
+                activeDragClone.hidden = true;
+                const elemBelow = document.elementFromPoint(e.clientX, e.clientY);
+                activeDragClone.hidden = false;
+                
+                dropZones.forEach(z => z.classList.remove('active'));
+                const dropZone = elemBelow ? elemBelow.closest('.drop-zone') : null;
+                if (dropZone && !dropZone.hasAttribute('data-filled')) dropZone.classList.add('active');
+            }
+
+            function onPointerUp(e) {
+                document.removeEventListener('pointermove', onPointerMove);
+                document.removeEventListener('pointerup', onPointerUp);
+                if (!activeDragClone || !activeItem) return;
+                
+                activeDragClone.hidden = true;
+                const elemBelow = document.elementFromPoint(e.clientX, e.clientY);
+                activeDragClone.hidden = false;
+
+                const dropZone = elemBelow ? elemBelow.closest('.drop-zone') : null;
+                const sourceDir = activeItem.getAttribute('data-dir');
+                
+                if (dropZone && !dropZone.hasAttribute('data-filled') && sourceDir === dropZone.getAttribute('data-target-dir')) {
+                    // Send custom sync event for the DROP
+                    if(!window.isSimulating) {
+                        window.parent.postMessage({
+                            type: 'IFRAME_ACTION_TRIGGERED',
+                            payload: { type: 'FIT_ARROW', sourceDir: sourceDir, dropZoneId: dropZone.id, seed: localSeed, actionId: 'fit_' + Date.now() }
+                        }, '*');
+                    }
+                    window.handleDropAttempt(sourceDir, dropZone.id, false);
+                } else if(dropZone && sourceDir !== dropZone.getAttribute('data-target-dir')) {
+                    // Wrong Match -> Shake dropzone
+                    dropZone.classList.add('shake', 'border-red-400');
+                    setTimeout(() => dropZone.classList.remove('shake', 'border-red-400'), 400);
+                }
+
+                clearDragGhost();
+                if(activeItem) activeItem.style.opacity = '1';
+                activeItem = null;
+                dropZones.forEach(z => z.classList.remove('active'));
+            }
+
+            // Sync receiver logic for drop completion
+            window.handleDropAttempt = function(sourceDir, dropZoneId, fromSync = false) {
+                const originalItem = document.getElementById(`drag-${sourceDir}`);
+                const dropZoneElement = document.getElementById(dropZoneId);
+                
+                if(!originalItem || !dropZoneElement) return;
+
+                dropZoneElement.innerHTML = ''; 
+                const placedItem = originalItem.cloneNode(true);
+                placedItem.classList.remove('drag-item', 'cursor-grab');
+                placedItem.classList.add('w-full', 'h-full', 'rounded-2xl', 'pop-in');
+                dropZoneElement.appendChild(placedItem);
+                dropZoneElement.setAttribute('data-filled', 'true');
+                dropZoneElement.classList.replace('bg-gray-50', 'bg-white');
+                dropZoneElement.style.border = 'none';
+
+                originalItem.style.visibility = 'hidden'; 
+                window.dragMatchCount++;
+
+                if (window.dragMatchCount === 4) {
+                    AppState.locked = true;
+                    setTimeout(showSuccess, 500);
+                }
+            };
+        }
+
+        // ============================================================
+        // UTILS & ANIMATIONS
+        // ============================================================
+        function showSuccess() {
+            overlay.classList.remove('hidden');
+            try { successSfx.currentTime = 0; successSfx.play().catch(()=>{}); } catch (err) {}
+            confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 }, colors: ['#3b82f6', '#22c55e', '#f97316', '#a855f7'], zIndex: 9999 });
+        }
+
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>

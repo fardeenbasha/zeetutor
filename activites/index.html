@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>⚡ LiveTutor Dual-Master Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://www.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            min-height: 100vh;
+            overflow-x: hidden; 
+            overflow-y: auto;
+        }
+        
+        .font-fredoka { font-family: 'Fredoka One', cursive; }
+
+        .workspace-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            flex: 1; 
+            padding: 10px;
+        }
+
+        .game-canvas {
+            position: relative;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8);
+            border: 5px solid rgba(255, 255, 255, 0.15);
+            width: 100%;
+            height: calc(100vh - 100px); 
+            overflow: hidden;
+        }
+
+        @media (min-width: 768px) {
+            .workspace-container {
+                padding: 20px;
+            }
+            .game-canvas {
+                height: auto;
+                max-width: 1200px; 
+                aspect-ratio: 16 / 9; 
+            }
+        }
+
+        .live-pointer {
+            pointer-events: none;
+            transition: all 0.2s linear; 
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body class="text-slate-100 flex flex-col h-screen select-none">
+
+    <div id="setup-screen" class="fixed inset-0 flex items-center justify-center p-4 z-50 bg-slate-950/90 backdrop-blur-md">
+        <div class="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-900/60 p-6 rounded-3xl border border-slate-800">
+            <div class="bg-slate-950/80 border-2 border-indigo-500/20 rounded-3xl p-6 md:p-8 flex flex-col items-center text-center transform hover:scale-[1.01] transition">
+                <h2 class="text-2xl font-fredoka mb-1 text-white">Teacher Portal</h2>
+                <div class="w-full mb-6 mt-4">
+                    <div class="flex gap-2">
+                        <input type="text" id="teacher-room-id" placeholder="Type or Generate" class="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl py-3 px-4 text-xl font-mono text-center text-amber-400 font-bold tracking-widest shadow-inner">
+                        <button onclick="generateRoomCode()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 rounded-2xl transition"><i data-lucide="refresh-cw" class="w-5 h-5"></i></button>
+                    </div>
+                </div>
+                <button onclick="launchSession('teacher')" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-2xl text-sm font-bold transition shadow-lg">Open Dashboard</button>
+            </div>
+
+            <div class="bg-slate-950/80 border-2 border-emerald-500/20 rounded-3xl p-6 md:p-8 flex flex-col items-center text-center transform hover:scale-[1.01] transition">
+                <h2 class="text-2xl font-fredoka mb-1 text-white">Student Room</h2>
+                <div class="w-full mb-6 mt-4">
+                    <input type="text" id="student-room-id" placeholder="Enter Code" class="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl py-3 px-4 text-xl font-mono text-center text-emerald-400 font-bold tracking-widest shadow-inner">
+                </div>
+                <button onclick="launchSession('student')" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-4 rounded-2xl text-sm font-bold transition shadow-lg">Connect Canvas</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-workspace" class="hidden flex-col h-screen">
+        
+        <header class="bg-slate-950/95 border-b border-slate-800 px-3 md:px-4 py-3 flex flex-wrap justify-between items-center gap-3 shadow-xl backdrop-blur-sm shrink-0">
+            <div class="flex items-center gap-2 md:gap-3">
+                <span id="role-badge" class="px-2 py-1 md:px-3 rounded-xl text-[10px] font-bold font-fredoka uppercase tracking-wider text-white"></span>
+                <span class="text-[10px] md:text-xs text-slate-400 font-fredoka">Room: <strong id="header-room-id" class="text-white text-sm md:text-base ml-1"></strong></span>
+                <div id="sync-status" class="flex items-center gap-1.5 px-2 py-0.5 md:px-2.5 bg-emerald-500/10 rounded-full border border-emerald-500/20 text-[9px] md:text-[10px] text-emerald-400 font-bold">
+                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> <span class="hidden md:inline">Sync Active</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <div id="teacher-controls" class="hidden flex items-center gap-2 overflow-x-auto no-scrollbar">
+                    
+                    <select id="preset-loader" onchange="loadPresetLink(this.value)" class="bg-slate-900 border border-slate-700 text-white text-[10px] md:text-xs px-2 py-1.5 md:py-2 rounded-xl focus:outline-none cursor-pointer font-bold max-w-[100px] md:max-w-[150px]">
+                        <option value="">Saved Files...</option>
+                    </select>
+
+                    <button onclick="deleteCurrentPreset()" id="delete-preset-btn" class="bg-rose-900/80 hover:bg-rose-800 text-white p-1.5 md:p-2 rounded-xl transition hidden">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5 md:w-4 md:h-4"></i>
+                    </button>
+
+                    <input type="text" id="folder-input" placeholder="Type file name..." class="bg-slate-950 border border-slate-700 rounded-xl px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-mono text-white focus:outline-none w-24 md:w-32 shadow-inner">
+                    
+                    <button onclick="saveCurrentFolderToDatabase()" class="bg-emerald-600 hover:bg-emerald-500 text-white p-1.5 md:p-2 rounded-xl transition">
+                        <i data-lucide="save" class="w-3.5 h-3.5 md:w-4 md:h-4"></i>
+                    </button>
+
+                    <button onclick="deployWorksheetFramework()" class="bg-blue-600 hover:bg-blue-500 text-white text-[10px] md:text-xs px-3 md:px-4 py-1.5 md:py-2 rounded-xl font-bold transition flex items-center gap-1.5">
+                        <i data-lucide="play" class="w-3 h-3 md:w-3.5 md:h-3.5"></i> Run
+                    </button>
+                </div>
+
+                <button onclick="location.reload()" class="bg-rose-900/80 hover:bg-rose-950 text-white px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl text-[10px] md:text-xs font-bold transition flex items-center gap-1">
+                    <i data-lucide="log-out" class="w-3 h-3 md:w-3.5 md:h-3.5"></i> <span class="hidden md:inline">Exit</span>
+                </button>
+            </div>
+        </header>
+
+        <main class="workspace-container">
+            <div class="game-canvas" id="shared-box">
+                <div class="h-1 w-full bg-gradient-to-r from-blue-500 to-purple-500 absolute top-0 left-0 z-10"></div>
+                
+                <iframe id="game-frame" class="w-full h-full border-0 absolute inset-0 bg-white" src="about:blank"></iframe>
+
+                <div id="loading-overlay" class="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center z-20 hidden">
+                    <div style="width:50px;height:50px;border:4px solid #334155;border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+                    <p class="text-slate-300 text-sm font-bold mt-4 font-fredoka tracking-wide">Loading Game...</p>
+                    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+                </div>
+
+                <div id="remote-pointer" class="live-pointer absolute top-0 left-0 w-6 h-6 md:w-8 md:h-8 hidden">
+                    <svg class="w-full h-full drop-shadow-2xl" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4.5 3V17L9 12.5L14 21.5L17.5 19.5L12.5 10.5L18.5 10.5L4.5 3Z" fill="#3b82f6" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                
+                <div id="touch-ripple" style="
+                    position:absolute; width:38px; height:38px; border-radius:50%;
+                    pointer-events:none; z-index:9998; display:none;
+                    transform:translate(-50%,-50%);
+                    background:rgba(59,130,246,0.2); border:3px solid #3b82f6;
+                "></div>
+                <style>
+                    @keyframes rippleOut {
+                        0%   { box-shadow:0 0 0 0 rgba(59,130,246,0.55); opacity:1; transform:translate(-50%,-50%) scale(1); }
+                        100% { box-shadow:0 0 0 28px rgba(59,130,246,0); opacity:0; transform:translate(-50%,-50%) scale(1.4); }
+                    }
+                    .ripple-active { animation: rippleOut 0.75s ease forwards !important; }
+                </style>
+            </div>
+        </main>
+    </div>
+
+    <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 border border-slate-600 text-white px-4 py-2 md:px-5 md:py-3 rounded-xl shadow-2xl transform translate-y-24 opacity-0 transition-all duration-300 z-50 text-[10px] md:text-xs font-bold max-w-[80vw]">
+        <span id="toast-text">Message</span>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyD640Y5hyvq7TAcGQnepO9K02G86VBeTUc",
+            authDomain: "livetutor-be614.firebaseapp.com",
+            databaseURL: "https://livetutor-be614-default-rtdb.firebaseio.com",
+            projectId: "livetutor-be614",
+            storageBucket: "livetutor-be614.firebasestorage.app",
+            messagingSenderId: "415272685714",
+            appId: "1:415272685714:web:f1840924806a2a6b8d164b"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let myRole = '';
+        let roomId = '';
+        let dbRef = null;
+        let globalPresetsRef = null;
+        let lastLoadedUrl = '';
+        let globalPresets = [];
+        let lastProcessedOuterActionId = null;
+
+        lucide.createIcons();
+
+        window.generateRoomCode = function() {
+            document.getElementById('teacher-room-id').value = Math.floor(1000 + Math.random() * 9000);
+        }
+
+        window.launchSession = function(role) {
+            myRole = role;
+            roomId = document.getElementById(role === 'teacher' ? 'teacher-room-id' : 'student-room-id').value.trim();
+            
+            if (!roomId) { showToast("Code required!"); return; }
+
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('main-workspace').classList.remove('hidden');
+            document.getElementById('main-workspace').classList.add('flex');
+            document.getElementById('header-room-id').innerText = roomId;
+            
+            if (myRole === 'teacher') {
+                document.getElementById('teacher-controls').classList.remove('hidden');
+                document.getElementById('role-badge').innerText = "Teacher";
+                document.getElementById('role-badge').className = "px-2 md:px-3 py-1 rounded-xl text-[9px] md:text-[10px] font-bold font-fredoka uppercase text-white bg-blue-600";
+            } else {
+                document.getElementById('role-badge').innerText = "Student";
+                document.getElementById('role-badge').className = "px-2 md:px-3 py-1 rounded-xl text-[9px] md:text-[10px] font-bold font-fredoka uppercase text-white bg-emerald-600";
+            }
+
+            connectFirebaseEngine();
+        }
+
+        function connectFirebaseEngine() {
+            dbRef = ref(db, 'global_rooms/' + roomId);
+            globalPresetsRef = ref(db, 'shared_presets/list');
+
+            onValue(globalPresetsRef, (snap) => {
+                globalPresets = snap.val() || [];
+                renderPresetsDropdown();
+            });
+
+            onValue(dbRef, (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    const runId = data.run_id || data.current_url || '';
+                    if (data.current_url && runId !== lastLoadedUrl) {
+                        lastLoadedUrl = runId;
+                        
+                        let rawUrl = data.current_url.trim();
+                        if (!rawUrl.toLowerCase().endsWith('.html')) {
+                            rawUrl = rawUrl + '/index.html';
+                        }
+                        
+                        let pathParts = rawUrl.split('/');
+                        let encodedUrl = pathParts.map(part => encodeURIComponent(part)).join('/');
+                        
+                        showLoadingOverlay();
+                        const frame = document.getElementById('game-frame');
+                        
+                        // 🛠️ ROOT CAUSE FIX 1: Removed Cache Buster (t=runId) to allow browser caching.
+                        // This entirely fixes the 3-minute delay for massive Base64 HTML files.
+                        const finalUrl = `${encodedUrl}#room=${roomId}`;
+
+                        frame.onload = () => {
+                            hideLoadingOverlay();
+                            clearTimeout(window._loadFallback);
+                        };
+                        
+                        clearTimeout(window._loadFallback);
+                        window._loadFallback = setTimeout(() => hideLoadingOverlay(), 3000);
+                        
+                        // 🛠️ ROOT CAUSE FIX 2: Staggered Loading Sequence
+                        // Teacher loads immediately. Student waits 2.5 seconds (2500ms) to prevent network bandwidth choking.
+                        const loadDelay = (myRole === 'student') ? 2500 : 10;
+
+                        setTimeout(() => { 
+                            frame.src = finalUrl; 
+                        }, loadDelay);
+                    }
+
+                    if (data.last_action && data.last_action.initiator !== myRole) {
+                        if (data.last_action.actionId && data.last_action.actionId !== lastProcessedOuterActionId) {
+                            lastProcessedOuterActionId = data.last_action.actionId;
+                            
+                            const frame = document.getElementById('game-frame');
+                            if (frame && frame.contentWindow) {
+                                frame.contentWindow.postMessage({ type: 'EXECUTE_UNIVERSAL_ACTION', action: data.last_action }, '*');
+                            }
+
+                            const rpl = document.getElementById('touch-ripple');
+                            if (rpl && data.pointer) {
+                                rpl.style.left = `${data.pointer.x}%`;
+                                rpl.style.top  = `${data.pointer.y}%`;
+                                rpl.style.display = 'block';
+                                rpl.classList.remove('ripple-active');
+                                void rpl.offsetWidth; 
+                                rpl.classList.add('ripple-active');
+                                clearTimeout(window.hideRpl);
+                                window.hideRpl = setTimeout(() => {
+                                    rpl.style.display = 'none';
+                                    rpl.classList.remove('ripple-active');
+                                }, 1000);
+                            }
+                        }
+                    }
+
+                    if (data.pointer && data.pointer.initiator !== myRole) {
+                        const ptr = document.getElementById('remote-pointer');
+                        ptr.style.left = `${data.pointer.x}%`;
+                        ptr.style.top  = `${data.pointer.y}%`;
+                        ptr.classList.remove('hidden');
+                        clearTimeout(window.hidePtr);
+                        window.hidePtr = setTimeout(() => ptr.classList.add('hidden'), 2500);
+                    }
+                } else if (myRole === 'teacher') {
+                    set(dbRef, { current_url: '', last_action: null });
+                }
+            });
+        }
+
+        function renderPresetsDropdown() {
+            const select = document.getElementById('preset-loader');
+            if (!select) return;
+            const currentSelected = select.value;
+            let html = `<option value="">Saved Files...</option>`;
+            globalPresets.forEach(p => { html += `<option value="${p}">${p}</option>`; });
+            select.innerHTML = html;
+            if (globalPresets.includes(currentSelected)) select.value = currentSelected;
+            toggleDeleteButton();
+        }
+
+        window.saveCurrentFolderToDatabase = function() {
+            const val = document.getElementById('folder-input').value.trim();
+            if (!val) return showToast("Type a file name first!");
+            
+            if (!globalPresets.includes(val)) {
+                globalPresets.push(val);
+                set(globalPresetsRef, globalPresets);
+                showToast("Saved to Cloud!");
+                document.getElementById('preset-loader').value = val;
+                toggleDeleteButton();
+            }
+        }
+
+        window.deleteCurrentPreset = function() {
+            const val = document.getElementById('preset-loader').value;
+            if (!val) return;
+            globalPresets = globalPresets.filter(p => p !== val);
+            set(globalPresetsRef, globalPresets);
+            document.getElementById('folder-input').value = '';
+            document.getElementById('preset-loader').value = '';
+            showToast("Deleted from Cloud!");
+            toggleDeleteButton();
+        }
+
+        window.loadPresetLink = function(val) {
+            if(!val) return;
+            document.getElementById('folder-input').value = val;
+            toggleDeleteButton();
+            deployWorksheetFramework();
+        }
+
+        function toggleDeleteButton() {
+            const val = document.getElementById('preset-loader').value;
+            const btn = document.getElementById('delete-preset-btn');
+            if (val) btn.classList.remove('hidden');
+            else btn.classList.add('hidden');
+        }
+
+        window.deployWorksheetFramework = function() {
+            let path = document.getElementById('folder-input').value.trim();
+            if(!path) return showToast("Enter file name!");
+            update(dbRef, { current_url: path, run_id: Date.now(), last_action: null });
+            showToast("Game Running...");
+        }
+
+        let lastFirebaseCursorUpdate = 0;
+
+        window.addEventListener('message', (event) => {
+            if (!dbRef) return;
+            
+            if (event.data?.type === 'IFRAME_ACTION_TRIGGERED') {
+                const payload = event.data.payload;
+                
+                if (payload?.type === 'UNIVERSAL_CURSOR') {
+                    const now = Date.now();
+                    // Throttled to 200ms
+                    if (now - lastFirebaseCursorUpdate > 200) {
+                        lastFirebaseCursorUpdate = now;
+                        update(dbRef, { pointer: { x: payload.pctX, y: payload.pctY, initiator: myRole } });
+                    }
+                } else {
+                    const actionId = payload.actionId || ('click_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+                    update(dbRef, { last_action: { ...payload, actionId, initiator: myRole, timestamp: Date.now() } });
+                }
+            }
+            
+            if (event.data?.type === 'IFRAME_MOUSE_TRACK') {
+                const now = Date.now();
+                if (now - lastFirebaseCursorUpdate > 200) {
+                    lastFirebaseCursorUpdate = now;
+                    update(dbRef, { pointer: { x: event.data.pctX, y: event.data.pctY, initiator: myRole } });
+                }
+            }
+        });
+
+        function showLoadingOverlay() { document.getElementById('loading-overlay').classList.remove('hidden'); }
+        function hideLoadingOverlay() { document.getElementById('loading-overlay').classList.add('hidden'); }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-text').innerText = msg;
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-24', 'opacity-0'), 2500);
+        }
+    </script>
+</body>
+</html>
