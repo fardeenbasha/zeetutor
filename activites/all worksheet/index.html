@@ -1,0 +1,2238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>LiveTutor Phonics Board Pro</title>
+    
+    <!-- Tailwind CSS for playful children typography and design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- LiveTutor Standardized Telemetry Synchronizer Block -->
+    <script>
+      window.isSimulating = false;
+      const urlParams = new URLSearchParams(window.location.search || window.location.hash.replace('#','?'));
+      const roomId = urlParams.get('room') || '54321';
+      let localSeed = 0;
+      
+      window.setSeed = function(str) {
+          let tempSeed = 0;
+          for (let i = 0; i < str.length; i++) { tempSeed = str.charCodeAt(i) + ((tempSeed << 5) - tempSeed); }
+          localSeed = Math.abs(tempSeed);
+      };
+      window.setSeed(roomId);
+      
+      window.seededRandom = function() {
+          let x = Math.sin(localSeed++) * 10000;
+          return x - Math.floor(x);
+      };
+
+      function shuf(arr) {
+          arr = [...arr];
+          for (let i = arr.length - 1; i > 0; i--) {
+              const j = Math.floor(window.seededRandom() * (i + 1));
+              [arr[i], arr[j]] = [arr[j], arr[i]];
+          }
+          return arr;
+      }
+
+      function getUniqueSelector(el) {
+          if (!el) return null;
+          if (el.id) return '#' + el.id;
+          if (el === document.body) return 'body';
+          let path = [];
+          while (el && el.nodeType === Node.ELEMENT_NODE) {
+              let selector = el.nodeName.toLowerCase();
+              if (el.id) { selector = '#' + el.id; path.unshift(selector); break; } 
+              else {
+                  if (el.className && typeof el.className === 'string') {
+                      const classes = Array.from(el.classList).filter(c => !c.includes(':') && !c.includes('[') && !c.includes('/')).join('.');
+                      if (classes) selector += '.' + classes;
+                  }
+                  let sibling = el, nth = 1;
+                  while (sibling = sibling.previousElementSibling) { if (sibling.nodeName.toLowerCase() === el.nodeName.toLowerCase()) nth++; }
+                  selector += ':nth-of-type(' + nth + ')';
+                  path.unshift(selector);
+              }
+              el = el.parentNode;
+          }
+          return path.join(' > ');
+      }
+
+      let actionIdCounter = 0;
+      document.addEventListener('click', (e) => {
+          if (e.isTrusted === false || window.isSimulating) return;
+          const selector = getUniqueSelector(e.target); if (!selector) return;
+          actionIdCounter++;
+          window.parent.postMessage({
+              type: 'IFRAME_ACTION_TRIGGERED',
+              payload: { type: 'UNIVERSAL_CLICK', selector: selector, seed: localSeed, actionId: 'click_' + actionIdCounter + '_' + Date.now() }
+          }, '*');
+      }, true);
+
+      let lastCursorTime = 0;
+      document.addEventListener('mousemove', (e) => {
+          const now = Date.now(); 
+          if (now - lastCursorTime < 45) return; 
+          lastCursorTime = now;
+          
+          const wrapper = document.getElementById('app-wrapper');
+          if (wrapper) {
+              const rect = wrapper.getBoundingClientRect();
+              const pctX = ((e.clientX - rect.left) / rect.width) * 100;
+              const pctY = ((e.clientY - rect.top) / rect.height) * 100;
+              window.parent.postMessage({ type: 'IFRAME_ACTION_TRIGGERED', payload: { type: 'UNIVERSAL_CURSOR', pctX, pctY } }, '*');
+          }
+      });
+
+      document.addEventListener('touchmove', (e) => {
+          if (e.touches.length > 0) {
+              const now = Date.now(); 
+              if (now - lastCursorTime < 45) return; 
+              lastCursorTime = now;
+              
+              const wrapper = document.getElementById('app-wrapper');
+              if (wrapper) {
+                  const rect = wrapper.getBoundingClientRect();
+                  const pctX = ((e.touches[0].clientX - rect.left) / rect.width) * 100;
+                  const pctY = ((e.touches[0].clientY - rect.top) / rect.height) * 100;
+                  window.parent.postMessage({ type: 'IFRAME_ACTION_TRIGGERED', payload: { type: 'UNIVERSAL_CURSOR', pctX, pctY } }, '*');
+              }
+          }
+      }, { passive: true });
+
+      let lastProcessedActionId = null;
+      window.addEventListener('message', (event) => {
+          if (event.data && event.data.type === 'EXECUTE_UNIVERSAL_ACTION') {
+              const action = event.data.action;
+              if (action.type === 'UNIVERSAL_CURSOR') {
+                  const c = document.getElementById('remote-cursor');
+                  const wrapper = document.getElementById('app-wrapper');
+                  if (c && wrapper) {
+                      const rect = wrapper.getBoundingClientRect();
+                      const localX = rect.left + (action.pctX / 100 * rect.width);
+                      const localY = rect.top + (action.pctY / 100 * rect.height);
+                      c.style.left = localX + 'px';
+                      c.style.top = localY + 'px';
+                      c.style.display = 'block';
+                  }
+                  return;
+              }
+              const currentActionId = action.actionId || action.timestamp;
+              if (currentActionId && currentActionId === lastProcessedActionId) return;
+              lastProcessedActionId = currentActionId;
+              window.isSimulating = true;
+              if (action.seed !== undefined) localSeed = action.seed;
+              
+              if (action.type === 'UNIVERSAL_CLICK') {
+                  const element = document.querySelector(action.selector);
+                  if (element) {
+                      element.click();
+                  }
+              }
+              if (typeof handleSyncActionLocal === 'function') {
+                  handleSyncActionLocal(action);
+              }
+              setTimeout(() => { window.isSimulating = false; }, 50);
+          }
+      });
+    </script>
+
+    <style>
+        :root {
+            --pink-soft: #fff1f2;
+            --mint-soft: #f0fdf4;
+            --blue-soft: #f0f9ff;
+            --kids-font: 'Fredoka', 'Comic Sans MS', cursive, sans-serif;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle, #fdf2f8 0%, #ecfdf5 100%);
+            margin: 0;
+            padding: 0;
+            overflow: hidden !important;
+            touch-action: none;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .font-kids {
+            font-family: var(--kids-font);
+        }
+        #app-wrapper {
+            width: 95%;
+            max-width: 1000px;
+            height: 95%;
+            max-height: 680px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden !important;
+            position: relative;
+            background-color: white;
+            border-radius: 28px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            border: 6px solid #e0f2fe;
+        }
+        #viewport-main-content {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+            overflow: hidden !important;
+            background-color: #f8fafc;
+        }
+        .screen-layout-pin {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden !important;
+        }
+        .scroller-box-inner {
+            overflow-y: auto !important;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 transparent;
+        }
+        .scroller-box-inner::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scroller-box-inner::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .scroller-box-inner::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 10px;
+        }
+        @keyframes rainbow-sweep {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+        .rainbow-btn-magic {
+            background: linear-gradient(45deg, #ef4444, #3b82f6, #10b981, #f59e0b, #ec4899);
+            animation: rainbow-sweep 4s linear infinite;
+        }
+        button *, a *, div[id^="btn-"] *, div[id^="select-"] * {
+            pointer-events: none !important;
+        }
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .trace-font {
+            font-family: var(--kids-font);
+            letter-spacing: 0.15em;
+            color: #cbd5e1;
+            font-weight: 400;
+        }
+        .sparkle-border {
+            border: 4px dashed #38bdf8;
+            animation: dash-animate 30s linear infinite;
+        }
+        @keyframes dash-animate {
+            to { stroke-dashoffset: -1000; }
+        }
+        @keyframes laser-glow-anim {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8), 0 0 8px rgba(239, 68, 68, 0.6); }
+            70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0), 0 0 12px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        #remote-cursor {
+            animation: laser-glow-anim 1.4s infinite;
+        }
+        .color-dot.active-brush {
+            transform: scale(1.25);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.5);
+        }
+        /* Custom kid-friendly card transitions */
+        .card-pop {
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .card-pop:hover {
+            transform: translateY(-4px) scale(1.02);
+        }
+    </style>
+</head>
+<body class="no-select">
+
+    <div id="remote-cursor" style="position:fixed; width:18px; height:18px; background:#ef4444; border-radius:50%; border:3px solid white; pointer-events:none; z-index:99999; transform:translate(-50%,-50%); display:none;"></div>
+
+    <div id="app-wrapper">
+        
+        <!-- MAIN APP HEADER -->
+        <header class="bg-gradient-to-r from-pink-400 via-purple-500 to-indigo-500 text-white px-4 py-3 flex justify-between items-center shadow-md shrink-0 z-40">
+            <div class="flex items-center space-x-2.5 cursor-pointer" id="header-brand-logo">
+                <span class="text-3xl animate-bounce">🍎</span>
+                <div>
+                    <h1 class="font-kids text-lg md:text-xl font-bold tracking-wide leading-tight">LiveTutor Phonics</h1>
+                    <p class="text-[10px] text-pink-100 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Active Multi-Device Classroom Sync
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <div class="bg-white/15 px-3 py-1 rounded-full text-[10px] font-semibold flex items-center gap-1.5">
+                    <i class="fa-solid fa-satellite-dish text-pink-200 animate-pulse"></i>
+                    <span id="active-state-display" class="max-w-[120px] truncate">HOME</span>
+                </div>
+                <button id="global-home-btn" class="hidden bg-white/20 hover:bg-white/30 px-3 py-1 rounded-xl text-xs font-bold font-kids transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-house"></i> Home
+                </button>
+            </div>
+        </header>
+
+        <div id="viewport-main-content">
+            
+            <!-- VIEW 1: MAIN HOME SCREEN -->
+            <div id="screen-home" class="screen-layout-pin bg-slate-50/95 justify-center items-center p-6 space-y-8">
+                <div class="text-center max-w-md">
+                    <h2 class="font-kids text-4xl text-slate-800 font-bold mb-1.5">Let's Play & Learn! 👋</h2>
+                    <p class="text-slate-500 text-sm font-medium">Build playful interactive phonics worksheets or explore assets library</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 w-full max-w-2xl px-4 items-center">
+                    <button id="btn-home-builder" class="h-44 bg-white rounded-3xl border-4 border-indigo-400 hover:border-indigo-500 shadow-md flex flex-col items-center justify-center p-5 transition-all duration-300 group">
+                        <span class="text-6xl group-hover:scale-110 transition duration-300 mb-3">📚</span>
+                        <h3 class="font-kids text-xl text-indigo-600 font-bold">Worksheet Builder</h3>
+                        <p class="text-xs text-slate-400 mt-1.5 max-w-[200px] text-center">Create spelling, tracing, and rhyming slides</p>
+                    </button>
+
+                    <button id="btn-home-library" class="h-44 bg-white rounded-3xl border-4 border-pink-400 hover:border-pink-500 shadow-md flex flex-col items-center justify-center p-5 transition-all duration-300 group">
+                        <span class="text-6xl group-hover:scale-110 transition duration-300 mb-3">🖼️</span>
+                        <h3 class="font-kids text-xl text-pink-600 font-bold">Image Library</h3>
+                        <p class="text-xs text-slate-400 mt-1.5 max-w-[200px] text-center">Manage, locate, and structure phonics picture cards</p>
+                    </button>
+                </div>
+            </div>
+
+            <!-- VIEW 2: IMAGE LIBRARY GRID VIEW -->
+            <div id="screen-library" class="screen-layout-pin hidden p-4 bg-slate-50">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 h-full min-h-0">
+                    
+                    <div class="bg-white rounded-2xl p-4 border border-slate-200 flex flex-col justify-between space-y-4 shadow-sm h-full min-h-0 overflow-hidden">
+                        <div class="space-y-4 flex flex-col min-h-0 flex-1 scroller-box-inner pr-1">
+                            <h3 class="font-kids text-base text-pink-600 font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-circle-info"></i> Asset Database Inspector
+                            </h3>
+                            
+                            <div class="bg-pink-50/50 rounded-xl p-3 border border-pink-100">
+                                <p class="text-xs text-pink-900 leading-relaxed font-medium">
+                                    This framework works automatically by searching your local <code>images/</code> folder for phonetic match targets!
+                                </p>
+                            </div>
+
+                            <div id="image-instant-preview-panel" class="hidden bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col items-center">
+                                <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Instant Preview</h4>
+                                <div class="h-28 w-28 bg-white border border-slate-200 rounded-lg flex items-center justify-center p-1.5 shadow-sm">
+                                    <img id="instant-preview-image-node" class="max-w-full max-h-full object-contain" src="">
+                                </div>
+                                <p id="instant-preview-title-node" class="font-kids text-xs font-bold text-slate-800 mt-2 truncate max-w-full text-center"></p>
+                            </div>
+                        </div>
+
+                        <button id="btn-library-back-home" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-kids text-xs py-2 rounded-xl transition shadow shrink-0">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Back to Home
+                        </button>
+                    </div>
+
+                    <!-- Right sidebar active assets gallery grid -->
+                    <div class="md:col-span-2 bg-white rounded-2xl p-4 border border-slate-200 flex flex-col h-full min-h-0 shadow-sm">
+                        <div class="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 shrink-0 mb-3">
+                            <h3 class="font-kids text-sm md:text-base text-slate-700 font-bold flex items-center gap-1.5">
+                                <i class="fa-regular fa-folder-open text-amber-500"></i> Active Phonics Assets
+                            </h3>
+                            
+                            <div class="relative max-w-xs w-1/2">
+                                <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 text-xs">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                </span>
+                                <input type="text" id="library-search-input" placeholder="Search template word..." class="w-full pl-7 pr-2.5 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-pink-400">
+                            </div>
+                        </div>
+
+                        <div class="flex-1 min-h-0 overflow-hidden">
+                            <div id="library-items-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-3 h-full overflow-y-auto pr-1 pb-4">
+                                <!-- Dynamic items injected here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 3: WIZARD STEP BUILDER -->
+            <div id="screen-builder" class="screen-layout-pin hidden p-4 bg-slate-50">
+                <div class="flex items-center justify-between max-w-lg mx-auto w-full mb-4 shrink-0">
+                    <div class="flex flex-col items-center flex-1">
+                        <div id="step-dot-1" class="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center font-kids text-sm font-bold shadow-sm transition">1</div>
+                        <span class="text-[9px] font-bold text-slate-500 mt-1 uppercase">Selection</span>
+                    </div>
+                    <div class="h-1 bg-slate-200 flex-1 -mt-4" id="step-line-1"></div>
+                    <div class="flex flex-col items-center flex-1">
+                        <div id="step-dot-2" class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-kids text-sm font-bold transition">2</div>
+                        <span class="text-[9px] font-bold text-slate-400 mt-1 uppercase">Images</span>
+                    </div>
+                    <div class="h-1 bg-slate-200 flex-1 -mt-4" id="step-line-2"></div>
+                    <div class="flex flex-col items-center flex-1">
+                        <div id="step-dot-3" class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-kids text-sm font-bold transition">3</div>
+                        <span class="text-[9px] font-bold text-slate-400 mt-1 uppercase">Activity</span>
+                    </div>
+                </div>
+
+                <!-- STEP 1 PANEL: TARGET SELECTION -->
+                <div id="builder-step-1" class="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200 p-4 shadow-sm min-h-0 overflow-hidden">
+                    <h3 class="font-kids text-base text-indigo-600 font-bold mb-3 flex items-center gap-1.5 shrink-0">
+                        <i class="fa-solid fa-list-ol"></i> Step 1: Choose Alphabet or Word Family Group
+                    </h3>
+                    
+                    <div class="flex-1 min-h-0 space-y-4 overflow-y-auto pr-1">
+                        <div>
+                            <h4 class="font-kids text-xs text-slate-500 font-bold uppercase mb-2">Individual Letters (A-Z)</h4>
+                            <div id="alphabets-selector-grid" class="grid grid-cols-6 sm:grid-cols-9 gap-1.5">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="font-kids text-xs text-slate-500 font-bold uppercase mb-2">Phonetic Word Families</h4>
+                            <div id="families-selector-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center mt-4 pt-3 border-t border-slate-100 shrink-0">
+                        <button id="btn-builder-cancel" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-kids text-xs px-4 py-2 rounded-xl transition">
+                            Cancel
+                        </button>
+                        <button id="step-1-next-btn" disabled class="bg-indigo-400 text-white font-kids text-xs px-5 py-2 rounded-xl cursor-not-allowed transition">
+                            Select an item to continue <i class="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 2 PANEL: PIC WORKSHEET IMAGES -->
+                <div id="builder-step-2" class="hidden flex-1 flex flex-col bg-white rounded-2xl border border-slate-200 p-4 shadow-sm min-h-0 overflow-hidden">
+                    <div class="flex justify-between items-center mb-3 shrink-0">
+                        <h3 class="font-kids text-base text-indigo-600 font-bold flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle-check"></i> Step 2: Pick Worksheet Images
+                        </h3>
+                        <div class="flex gap-2">
+                            <button id="btn-select-all-images" class="text-[10px] font-bold text-indigo-500 hover:underline">Select All</button>
+                            <span class="text-slate-300">|</span>
+                            <button id="btn-deselect-all-images" class="text-[10px] font-bold text-slate-500 hover:underline">Deselect All</button>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 min-h-0 overflow-hidden">
+                        <div id="step-images-selection-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-3 h-full overflow-y-auto pr-1 pb-4">
+                            <!-- Dynamic selectable items injected here -->
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center mt-3 pt-3 border-t border-slate-100 shrink-0">
+                        <button id="btn-step-2-back" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-kids text-xs px-4 py-2 rounded-xl transition">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Back
+                        </button>
+                        <button id="step-2-next-btn" disabled class="bg-indigo-400 text-white font-kids text-xs px-5 py-2 rounded-xl cursor-not-allowed transition">
+                            Select images to continue <i class="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 3 PANEL: TEMPLATE VARIATIONS -->
+                <div id="builder-step-3" class="hidden flex-1 flex flex-col bg-white rounded-2xl border border-slate-200 p-4 shadow-sm min-h-0 overflow-hidden">
+                    <h3 class="font-kids text-base text-indigo-600 font-bold mb-3 flex items-center gap-1.5 shrink-0">
+                        <i class="fa-solid fa-magic"></i> Step 3: Choose Worksheet Activity Template
+                    </h3>
+
+                    <div class="flex-1 min-h-0 overflow-hidden">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 h-full overflow-y-auto pr-1 pb-4">
+                            <button id="btn-style-know-words" class="style-card bg-slate-50 hover:bg-amber-50 border-2 border-slate-200 rounded-2xl p-4 text-center transition flex flex-col items-center justify-center">
+                                <span class="text-4xl mb-2">📖</span>
+                                <h4 class="font-kids text-xs font-bold text-slate-700">1. Know Words</h4>
+                                <p class="text-[9px] text-slate-400 mt-1 max-w-[150px]">Large image & phonetic labels presentation</p>
+                            </button>
+
+                            <button id="btn-style-missing-letter" class="style-card bg-slate-50 hover:bg-emerald-50 border-2 border-slate-200 rounded-2xl p-4 text-center transition flex flex-col items-center justify-center">
+                                <span class="text-4xl mb-2">❓</span>
+                                <h4 class="font-kids text-xs font-bold text-slate-700">2. Missing First Letter</h4>
+                                <p class="text-[9px] text-slate-400 mt-1 max-w-[150px]">Write the missing starting letter</p>
+                            </button>
+
+                            <button id="btn-style-trace-letter" class="style-card bg-slate-50 hover:bg-pink-50 border-2 border-slate-200 rounded-2xl p-4 text-center transition flex flex-col items-center justify-center">
+                                <span class="text-4xl mb-2">✏️</span>
+                                <h4 class="font-kids text-xs font-bold text-slate-700">3. Trace Letter</h4>
+                                <p class="text-[9px] text-slate-400 mt-1 max-w-[150px]">Tracing dotted guideline outlines</p>
+                            </button>
+
+                            <button id="btn-style-circle-correct" class="style-card bg-slate-50 hover:bg-purple-50 border-2 border-slate-200 rounded-2xl p-4 text-center transition flex flex-col items-center justify-center">
+                                <span class="text-4xl mb-2">⭕</span>
+                                <h4 class="font-kids text-xs font-bold text-slate-700">4. Circle Correct Word</h4>
+                                <p class="text-[9px] text-slate-400 mt-1 max-w-[150px]">Choose the correct phonetic name</p>
+                            </button>
+
+                            <button id="btn-style-match-pic-word" class="style-card bg-slate-50 hover:bg-sky-50 border-2 border-slate-200 rounded-2xl p-4 text-center transition flex flex-col items-center justify-center">
+                                <span class="text-4xl mb-2">🔗</span>
+                                <h4 class="font-kids text-xs font-bold text-slate-700">5. Match Picture To Word</h4>
+                                <p class="text-[9px] text-slate-400 mt-1 max-w-[150px]">Connect left columns graphics to correct text</p>
+                            </button>
+
+                            <button id="btn-style-match-pic-correct-word" class="style-card bg-slate-50 hover:bg-teal-50 border-2 border-slate-200 rounded-2xl p-4 text-center transition flex flex-col items-center justify-center">
+                                <span class="text-4xl mb-2">🖍️</span>
+                                <h4 class="font-kids text-xs font-bold text-slate-700">6. Match Pair (Tap to Lock)</h4>
+                                <p class="text-[9px] text-slate-400 mt-1 max-w-[200px]">Tap cards to pair and snap-lock them together</p>
+                            </button>
+
+                            <button id="btn-style-connect-rhyming" class="style-card bg-slate-50 hover:bg-rose-50 border-2 border-slate-200 rounded-2xl p-4 text-center transition flex flex-col items-center justify-center col-span-1 sm:col-span-3">
+                                <span class="text-4xl mb-2">🎵</span>
+                                <h4 class="font-kids text-xs font-bold text-slate-700">7. Connect Rhyming Word Families</h4>
+                                <p class="text-[9px] text-slate-400 mt-1 max-w-[200px]">Interactive match lines connecting families</p>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center mt-3 pt-3 border-t border-slate-100 shrink-0">
+                        <button id="btn-step-3-back" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-kids text-xs px-4 py-2 rounded-xl transition">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Back
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 4: PRESENTATION STAGE (WORKSHEET PLAYROOM) -->
+            <div id="screen-presentation" class="screen-layout-pin hidden bg-slate-100 overflow-hidden relative">
+                <div class="bg-slate-50 px-3 py-2 border-b border-slate-200 flex justify-between items-center shrink-0 z-40 shadow-sm">
+                    <button id="btn-presentation-exit" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-kids text-[10px] px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+                        <i class="fa-solid fa-angles-left"></i> Exit
+                    </button>
+
+                    <div class="flex items-center space-x-1.5">
+                        <div id="presentation-palette" class="flex items-center space-x-1.5 bg-white px-2.5 py-1 rounded-xl border border-slate-200 font-kids text-xs">
+                            <button id="color-dot-red" class="color-dot w-5 h-5 rounded-full ring-2 ring-transparent ring-offset-1 transition" style="background-color: #ef4444;"></button>
+                            <button id="color-dot-blue" class="color-dot w-5 h-5 rounded-full ring-2 ring-transparent ring-offset-1 transition" style="background-color: #3b82f6;"></button>
+                            <button id="color-dot-green" class="color-dot w-5 h-5 rounded-full ring-2 ring-transparent ring-offset-1 transition" style="background-color: #10b981;"></button>
+                            <button id="color-dot-yellow" class="color-dot w-5 h-5 rounded-full ring-2 ring-transparent ring-offset-1 transition" style="background-color: #f59e0b;"></button>
+                            <button id="color-dot-black" class="color-dot w-5 h-5 rounded-full ring-2 ring-transparent ring-offset-1 transition" style="background-color: #000000;"></button>
+                            
+                            <button id="color-dot-rainbow" class="color-dot px-2 py-0.5 rounded-lg text-[10px] font-kids text-white font-bold transition flex items-center gap-1 shrink-0 rainbow-btn-magic shadow" title="Rainbow Pen!">
+                                🌈 Rainbow
+                            </button>
+                        </div>
+
+                        <div class="flex bg-slate-200 p-0.5 rounded-xl border border-slate-300">
+                            <button id="tool-draw-btn" class="text-[9px] font-bold px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1 transition">
+                                <i class="fa-solid fa-pencil"></i> Pen
+                            </button>
+                            <button id="tool-erase-btn" class="text-[9px] font-bold px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1 transition">
+                                <i class="fa-solid fa-eraser"></i> Erase
+                            </button>
+                        </div>
+
+                        <div class="flex items-center space-x-1">
+                            <button id="btn-zoom-in" class="w-7 h-7 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 text-xs text-slate-600 flex items-center justify-center transition" title="Zoom In">
+                                <i class="fa-solid fa-plus text-[10px]"></i>
+                            </button>
+                            <button id="btn-zoom-out" class="w-7 h-7 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 text-xs text-slate-600 flex items-center justify-center transition" title="Zoom Out">
+                                <i class="fa-solid fa-minus text-[10px]"></i>
+                            </button>
+                            <button id="btn-zoom-reset" class="w-7 h-7 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 text-xs text-slate-600 flex items-center justify-center transition" title="Reset Frame">
+                                <i class="fa-solid fa-arrows-to-eye text-[10px]"></i>
+                            </button>
+                            <div class="w-px h-5 bg-slate-300 mx-1"></div>
+                            <button id="btn-sound-play" class="w-7 h-7 bg-yellow-50 hover:bg-yellow-100 rounded-lg border border-yellow-200 text-yellow-600 flex items-center justify-center transition" title="Play Pronunciation">
+                                <i class="fa-solid fa-volume-high text-[10px]"></i>
+                            </button>
+                            <button id="btn-draw-undo" class="w-7 h-7 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 text-xs text-slate-600 flex items-center justify-center transition" title="Undo Stroke">
+                                <i class="fa-solid fa-arrow-rotate-left text-[10px]"></i>
+                            </button>
+                            <button id="btn-draw-clear" class="w-7 h-7 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 text-xs text-red-600 flex items-center justify-center transition" title="Clear Canvas">
+                                <i class="fa-regular fa-trash-can text-[10px]"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <span id="zoom-badge" class="bg-indigo-50 border border-indigo-200 text-indigo-700 text-[8px] font-bold px-2 py-0.5 rounded-full select-none shrink-0">100%</span>
+                </div>
+
+                <!-- PLAYGROUND VIEWPORT -->
+                <div id="presentation-viewport" class="flex-1 select-none bg-slate-100 relative overflow-hidden flex items-center justify-center h-full w-full">
+                    
+                    <!-- ADAPTIVE TRANSFORM CONTAINER -->
+                    <div id="zoom-stage" class="absolute w-full h-full bg-white rounded-2xl shadow-md border-4 border-slate-200 flex flex-col justify-between overflow-hidden transition-transform duration-75">
+                        
+                        <!-- LAYER 1: Dynamic Worksheet Template background layouts -->
+                        <div id="worksheet-layout-target" class="flex-1 w-full h-full relative p-6 flex flex-col items-center justify-center overflow-hidden z-10">
+                            <!-- Injected programmatically based on active template -->
+                        </div>
+
+                        <!-- LAYER 2: Matching Vector Lines SVG overlay -->
+                        <svg id="interactive-matching-lines" class="absolute inset-0 pointer-events-none z-20 w-full h-full">
+                            <!-- Curved matching indicators constructed here -->
+                        </svg>
+
+                        <!-- LAYER 3: Transparent Always-ON Sketch Canvas Drawing Overlay -->
+                        <canvas id="presentation-drawing-canvas" class="absolute inset-0 w-full h-full cursor-crosshair z-30" style="pointer-events: auto;"></canvas>
+                    </div>
+                </div>
+
+                <!-- HUD Footer controls -->
+                <div class="bg-slate-50 border-t border-slate-200 px-3 py-1.5 flex justify-between items-center shrink-0 z-40 text-[10px] text-slate-500 font-kids">
+                    <div class="flex items-center space-x-1 font-kids">
+                        <button id="btn-prev-slide" class="bg-white hover:bg-slate-200 border border-slate-200 rounded-lg px-3 py-1 font-bold transition flex items-center gap-1">
+                            <i class="fa-solid fa-chevron-left text-[8px]"></i> Prev
+                        </button>
+                        <span id="slide-index-counter" class="font-mono text-slate-700 font-bold px-2">Slide 1/1</span>
+                        <button id="btn-next-slide" class="bg-white hover:bg-slate-200 border border-slate-200 rounded-lg px-3 py-1 font-bold transition flex items-center gap-1">
+                            Next <i class="fa-solid fa-chevron-right text-[8px]"></i>
+                        </button>
+                    </div>
+                    <div id="coordinates-hud" class="font-mono text-[9px] text-slate-400">X: 0.00, Y: 0.00</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // High-Quality Phonics Database (Used as local fallback configuration)
+        const localPhonicsDatabase = [
+            { id: 'img-aeroplane', searchName: 'aeroplane', category: 'a', word: 'Aeroplane', fallbackSvg: '✈️' },
+            { id: 'img-alligator', searchName: 'alligator', category: 'a', word: 'Alligator', fallbackSvg: '🐊' },
+            { id: 'img-ant', searchName: 'ant', category: 'a', word: 'Ant', fallbackSvg: '🐜' },
+            { id: 'img-apple', searchName: 'apple', category: 'a', word: 'Apple', fallbackSvg: '🍎' },
+            { id: 'img-astronaut', searchName: 'astronaut', category: 'a', word: 'Astronaut', fallbackSvg: '👨‍🚀' },
+            { id: 'img-axe', searchName: 'axe', category: 'a', word: 'Axe', fallbackSvg: '🪓' },
+            { id: 'img-ballon', searchName: 'ballon', category: 'b', word: 'Balloon', fallbackSvg: '🎈' },
+            { id: 'img-bee', searchName: 'bee', category: 'b', word: 'Bee', fallbackSvg: '🐝' },
+            { id: 'img-car', searchName: 'car', category: 'c', word: 'Car', fallbackSvg: '🚗' },
+            { id: 'img-cat', searchName: 'cat', category: 'at', word: 'Cat', fallbackSvg: '🐱' },
+            { id: 'img-bat', searchName: 'bat', category: 'at', word: 'Bat', fallbackSvg: '🦇' },
+            { id: 'img-hat', searchName: 'hat', category: 'at', word: 'Hat', fallbackSvg: '🎩' },
+            { id: 'img-mat', searchName: 'mat', category: 'at', word: 'Mat', fallbackSvg: '🎚️' },
+            { id: 'img-rat', searchName: 'rat', category: 'at', word: 'Rat', fallbackSvg: '🐀' },
+            { id: 'img-pat', searchName: 'pat', category: 'at', word: 'Pat', fallbackSvg: '🤚' },
+            { id: 'img-dog', searchName: 'dog', category: 'og', word: 'Dog', fallbackSvg: '🐶' },
+            { id: 'img-log', searchName: 'log', category: 'og', word: 'Log', fallbackSvg: '🪵' },
+            { id: 'img-frog', searchName: 'frog', category: 'f', word: 'Frog', fallbackSvg: '🐸' },
+            { id: 'img-doll', searchName: 'doll', category: 'd', word: 'Doll', fallbackSvg: '🪆' },
+            { id: 'img-dolphine', searchName: 'dolphine', category: 'd', word: 'Dolphin', fallbackSvg: '🐬' },
+            { id: 'img-eagel', searchName: 'eagel', category: 'e', word: 'Eagle', fallbackSvg: '🦅' },
+            { id: 'img-eye', searchName: 'eye', category: 'e', word: 'Eye', fallbackSvg: '👁️' },
+            { id: 'img-fox', searchName: 'fox', category: 'f', word: 'Fox', fallbackSvg: '🦊' },
+            { id: 'img-goat', searchName: 'goat', category: 'g', word: 'Goat', fallbackSvg: '🐐' },
+            { id: 'img-hat2', searchName: 'hat', category: 'h', word: 'Hat', fallbackSvg: '👒' },
+            { id: 'img-horse', searchName: 'horse', category: 'h', word: 'Horse', fallbackSvg: '🐎' },
+            { id: 'img-icecream', searchName: 'icecream', category: 'i', word: 'Ice Cream', fallbackSvg: '🍦' },
+            { id: 'img-injection', searchName: 'injection', category: 'i', word: 'Injection', fallbackSvg: '💉' },
+            { id: 'img-jellyfish', searchName: 'jelly fish', category: 'j', word: 'Jellyfish', fallbackSvg: '🪼' },
+            { id: 'img-juice', searchName: 'juice', category: 'j', word: 'Juice', fallbackSvg: '🍹' },
+            { id: 'img-kangaroo', searchName: 'kangaroo', category: 'k', word: 'Kangaroo', fallbackSvg: '🦘' },
+            { id: 'img-kite', searchName: 'kite', category: 'k', word: 'Kite', fallbackSvg: '🪁' },
+            { id: 'img-lion', searchName: 'lion', category: 'l', word: 'Lion', fallbackSvg: '🦁' },
+            { id: 'img-mango', searchName: 'mango', category: 'm', word: 'Mango', fallbackSvg: '🥭' },
+            { id: 'img-monkey', searchName: 'monkey', category: 'm', word: 'Monkey', fallbackSvg: '🐒' },
+            { id: 'img-nest', searchName: 'nest', category: 'n', word: 'Nest', fallbackSvg: '🪹' },
+            { id: 'img-notebook', searchName: 'notebook', category: 'n', word: 'Notebook', fallbackSvg: '📓' },
+            { id: 'img-onion', searchName: 'onion', category: 'o', word: 'Onion', fallbackSvg: '🧅' },
+            { id: 'img-owl', searchName: 'owl', category: 'o', word: 'Owl', fallbackSvg: '🦉' },
+            { id: 'img-panda', searchName: 'panda', category: 'p', word: 'Panda', fallbackSvg: '🐼' },
+            { id: 'img-pencil', searchName: 'pencil', category: 'p', word: 'Pencil', fallbackSvg: '✏️' },
+            { id: 'img-quail', searchName: 'quail', category: 'q', word: 'Quail', fallbackSvg: '🐦' },
+            { id: 'img-queen', searchName: 'queen', category: 'q', word: 'Queen', fallbackSvg: '👸' },
+            { id: 'img-rabbit', searchName: 'rabbit', category: 'r', word: 'Rabbit', fallbackSvg: '🐰' },
+            { id: 'img-santa', searchName: 'santa', category: 's', word: 'Santa', fallbackSvg: '🎅' },
+            { id: 'img-spider', searchName: 'spider', category: 's', word: 'Spider', fallbackSvg: '🕷️' },
+            { id: 'img-table', searchName: 'table', category: 't', word: 'Table', fallbackSvg: '🪵' },
+            { id: 'img-truck', searchName: 'truck', category: 't', word: 'Truck', fallbackSvg: '🚚' },
+            { id: 'img-ubmerla', searchName: 'ubmerla', category: 'u', word: 'Umbrella', fallbackSvg: '☂️' },
+            { id: 'img-van', searchName: 'van', category: 'v', word: 'Van', fallbackSvg: '🚐' },
+            { id: 'img-watermelon', searchName: 'watermelon', category: 'w', word: 'Watermelon', fallbackSvg: '🍉' },
+            { id: 'img-world', searchName: 'world', category: 'w', word: 'World', fallbackSvg: '🌍' },
+            { id: 'img-xray', searchName: 'xray', category: 'x', word: 'X-Ray', fallbackSvg: '🩻' },
+            { id: 'img-zerba', searchName: 'zerba', category: 'z', word: 'Zebra', fallbackSvg: '🦓' }
+        ];
+
+        let library = [...localPhonicsDatabase];
+
+        // UI View States
+        let activeScreen = 'home';
+        let wizardStep = 1;
+        let selectedFilterType = null;
+        let selectedFilterValue = null;
+        let selectedImageIds = [];
+        let selectedStyle = null;
+
+        // Interactive Slide decks
+        let currentSlideIndex = 0;
+        let slideDeck = [];
+
+        // Scale offsets variables
+        let canvasScale = 1.0;
+        let canvasPanX = 0;
+        let canvasPanY = 0;
+
+        // Brush drawing databases
+        let drawingModeActive = false;
+        let currentStrokePoints = [];
+        let strokeAnnotatorDb = [];
+
+        // Smooth Brush parameters
+        let canvasColor = '#ef4444';
+        let canvasBrushSize = 5;
+        let canvasTool = 'draw'; // Active/ON by default on launch!
+        let lastDrawMsgTime = 0;
+        let rainbowHueCounter = 0;
+
+        // Connecting matching curves trackers
+        let matchedNodeTraces = [];
+        let temporaryLeftSelectedNodeId = null;
+
+        // Custom card locking state (Match Pair)
+        let activePairsSelected = [];
+        let solvedPairsDeck = [];
+
+        // Safe Image extension fallback cycler
+        function applySmartImage(imgNode, item) {
+            if (!imgNode || !item) return;
+
+            const exts = ['gif', 'png', 'jpg', 'jpeg', 'webp', 'svg'];
+            let extIndex = 0;
+            
+            // Clean search name (remove trailing extensions if they exist)
+            let cleanName = item.searchName || '';
+            const originalExt = cleanName.includes('.') ? cleanName.split('.').pop().toLowerCase() : null;
+            if (cleanName.includes('.')) {
+                cleanName = cleanName.split('.')[0];
+            }
+            cleanName = cleanName.toLowerCase().trim();
+
+            let targetExts = [...exts];
+            if (originalExt && targetExts.includes(originalExt)) {
+                targetExts = [originalExt, ...targetExts.filter(e => e !== originalExt)];
+            }
+            
+            imgNode.onerror = () => {
+                extIndex++;
+                if (extIndex < targetExts.length) {
+                    imgNode.src = `images/${cleanName}.${targetExts[extIndex]}`;
+                } else {
+                    imgNode.onerror = null;
+                    // Draw a beautifully styled fallback inline SVG instead of broken card
+                    imgNode.src = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23f1f5f9' rx='16'/><text x='50' y='55' font-size='32' text-anchor='middle'>${item.fallbackSvg || '🍎'}</text></svg>`;
+                }
+            };
+            
+            if (item.searchName && item.searchName.includes('.')) {
+                imgNode.src = `images/${item.searchName}`;
+            } else {
+                imgNode.src = `images/${cleanName}.${targetExts[0]}`;
+            }
+        }
+
+        // Standardized centralized filtering mechanism
+        function getMatchingImages(type, value) {
+            return library.filter(img => {
+                if (type === 'alphabet') {
+                    return img.category === value || (img.word && img.word.toLowerCase().startsWith(value));
+                } else if (type === 'family') {
+                    return img.category === value;
+                }
+                return false;
+            });
+        }
+    </script>
+
+    <script>
+        // Synchronized telemetry parser hook
+        function handleSyncActionLocal(action) {
+            switch(action.type) {
+                case 'NAVIGATE_VIEW':
+                    applyNavigationState(action.screen);
+                    break;
+                case 'WIZARD_STEP_CHANGE':
+                    wizardStep = action.step;
+                    selectedFilterType = action.selectedFilterType;
+                    selectedFilterValue = action.selectedFilterValue;
+                    applyWizardStepState(action.step);
+                    break;
+                case 'SELECTION_CHANGED':
+                    applyBuilderCategoryState(action.filterType, action.filterValue);
+                    break;
+                case 'IMAGE_PICK_CHANGED':
+                    selectedImageIds = action.selectedImageIds;
+                    if (wizardStep === 2) { renderStep2ImagesUI(); }
+                    break;
+                case 'STYLE_SELECTED':
+                    applyActivityStyleState(action.style);
+                    break;
+                case 'WORKSHEET_LAUNCHED':
+                    selectedStyle = action.style;
+                    selectedImageIds = action.imageIds;
+                    selectedFilterType = action.selectedFilterType || selectedFilterType;
+                    selectedFilterValue = action.selectedFilterValue || selectedFilterValue;
+                    executeWorksheetSlideCompilation();
+                    break;
+                case 'SLIDE_NAVIGATE':
+                    currentSlideIndex = action.index;
+                    renderSlidePresentationView();
+                    break;
+                case 'PLAY_AUDIO_SYNC':
+                    executeProceduralSpeechSynthesizer(action.letter);
+                    break;
+                case 'TEXT_ENTRY_SYNC':
+                    applyTextEntryValue(action.value, action.isCorrect);
+                    break;
+                case 'OPTION_SELECT_SYNC':
+                    applyChoiceOptionSelection(action.buttonId, action.isCorrect);
+                    break;
+                case 'NODE_CONNECT_SYNC':
+                    matchedNodeTraces.push({ leftNodeId: action.left, rightNodeId: action.right, strokeColor: action.color });
+                    rebuildSynchronizedMatchesOverlays();
+                    break;
+                case 'UNIVERSAL_DRAG':
+                    canvasScale = action.scale;
+                    canvasPanX = action.panX;
+                    canvasPanY = action.panY;
+                    applyTransformStageOffsets();
+                    break;
+                case 'UNIVERSAL_DRAW':
+                    strokeAnnotatorDb = action.strokes || [];
+                    repaintDrawingCanvas();
+                    break;
+                case 'DRAW_START':
+                    drawingModeActive = true;
+                    currentStrokePoints = [{ x: action.x, y: action.y, hue: action.hue }];
+                    canvasColor = action.color;
+                    canvasBrushSize = action.size;
+                    canvasTool = action.tool;
+                    break;
+                case 'DRAW_MOVE':
+                    currentStrokePoints.push({ x: action.x, y: action.y, hue: action.hue });
+                    repaintDrawingCanvas();
+                    break;
+                case 'DRAW_END':
+                    drawingModeActive = false;
+                    if (currentStrokePoints.length > 0) {
+                        strokeAnnotatorDb.push({
+                            color: canvasColor,
+                            size: canvasBrushSize,
+                            tool: canvasTool,
+                            points: [...currentStrokePoints]
+                        });
+                        currentStrokePoints = [];
+                        repaintDrawingCanvas();
+                    }
+                    break;
+                case 'UNIVERSAL_RESET':
+                    executeClearAnnotationsCommand();
+                    break;
+                case 'UNIVERSAL_SELECTION':
+                    if (action.selectionType === 'tool') {
+                        applyCanvasInteractiveTool(action.val);
+                    } else if (action.selectionType === 'color') {
+                        applyCanvasStrokeColor(action.val);
+                    }
+                    break;
+                case 'PAIR_SELECTION_SYNC':
+                    applyPairCardHighlight(action.cardId, action.isImage);
+                    break;
+                case 'PAIR_RESOLVED_SYNC':
+                    solvedPairsDeck.push(action.left, action.right);
+                    rebuildPairMatchingState();
+                    break;
+                case 'EXIT_WORKSHEET':
+                    applyNavigationState('builder');
+                    break;
+            }
+        }
+
+        function broadcastLiveTutorMessage(type, payload) {
+            if (window.isSimulating) return;
+            window.parent.postMessage({
+                type: 'IFRAME_ACTION_TRIGGERED',
+                payload: {
+                    type: type,
+                    seed: localSeed,
+                    actionId: 'sync_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+                    ...payload
+                }
+            }, '*');
+        }
+
+        function setupStageResizeObservers() {
+            const viewport = document.getElementById('presentation-viewport');
+            if (viewport) {
+                new ResizeObserver(() => recalculatePresentationCanvasBoundaries()).observe(viewport);
+            }
+            window.addEventListener('resize', recalculatePresentationCanvasBoundaries);
+        }
+
+        function recalculatePresentationCanvasBoundaries() {
+            const canvas = document.getElementById('presentation-drawing-canvas');
+            const stage = document.getElementById('zoom-stage');
+            if (!canvas || !stage) return;
+            const rect = stage.getBoundingClientRect();
+            canvas.width = rect.width > 0 ? rect.width : stage.clientWidth || 800;
+            canvas.height = rect.height > 0 ? rect.height : stage.clientHeight || 550;
+            rebuildSynchronizedMatchesOverlays();
+            repaintDrawingCanvas();
+        }
+
+        function applyNavigationState(screen) {
+            activeScreen = screen;
+            document.getElementById('screen-home').classList.add('hidden');
+            document.getElementById('screen-library').classList.add('hidden');
+            document.getElementById('screen-builder').classList.add('hidden');
+            document.getElementById('screen-presentation').classList.add('hidden');
+
+            const viewNode = document.getElementById(`screen-${screen}`);
+            if (viewNode) viewNode.classList.remove('hidden');
+
+            const homeBtn = document.getElementById('global-home-btn');
+            const stateDisplay = document.getElementById('active-state-display');
+            if (screen === 'home') {
+                if (homeBtn) homeBtn.classList.add('hidden');
+                if (stateDisplay) stateDisplay.innerText = "HOME";
+            } else {
+                if (homeBtn) homeBtn.classList.remove('hidden');
+                if (stateDisplay) stateDisplay.innerText = screen.toUpperCase();
+            }
+
+            if (screen === 'builder') { resetWizardConstructionStates(); }
+
+            if (screen === 'presentation') {
+                applyCanvasInteractiveTool('draw'); 
+                setTimeout(() => {
+                    recalculatePresentationCanvasBoundaries();
+                    setupDrawingListeners();
+                }, 80);
+            }
+        }
+
+        function resetWizardConstructionStates() {
+            wizardStep = 1;
+            selectedFilterType = null;
+            selectedFilterValue = null;
+            selectedImageIds = [];
+            selectedStyle = null;
+            applyWizardStepState(1);
+            renderStep1SelectionsUI();
+        }
+
+        function applyWizardStepState(step) {
+            wizardStep = step;
+            document.getElementById('builder-step-1').classList.add('hidden');
+            document.getElementById('builder-step-2').classList.add('hidden');
+            document.getElementById('builder-step-3').classList.add('hidden');
+            document.getElementById(`builder-step-${step}`).classList.remove('hidden');
+
+            for (let i = 1; i <= 3; i++) {
+                const dot = document.getElementById(`step-dot-${i}`);
+                const line = document.getElementById(`step-line-${i - 1}`);
+                if (dot) {
+                    if (i < step) {
+                        dot.className = "w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-kids text-sm font-bold shadow-sm transition";
+                    } else if (i === step) {
+                        dot.className = "w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center font-kids text-sm font-bold shadow-lg transition scale-110";
+                    } else {
+                        dot.className = "w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-kids text-sm font-bold transition";
+                    }
+                }
+                if (line) {
+                    line.className = i < step ? "h-1 bg-emerald-500 flex-1 -mt-4 transition" : "h-1 bg-slate-200 flex-1 -mt-4 transition";
+                }
+            }
+            if (step === 2) { renderStep2ImagesUI(); }
+        }
+    </script>
+
+    <script>
+        function renderStep1SelectionsUI() {
+            const abcGrid = document.getElementById('alphabets-selector-grid');
+            if (abcGrid) {
+                abcGrid.innerHTML = '';
+                for (let i = 97; i <= 122; i++) {
+                    const letter = String.fromCharCode(i);
+                    const btn = document.createElement('button');
+                    btn.id = `select-letter-${letter}`;
+                    btn.className = "h-9 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 font-kids text-sm font-bold text-slate-700 border-2 border-slate-200 hover:border-indigo-400 rounded-xl transition flex items-center justify-center uppercase shadow-sm pointer-events-none w-full";
+                    btn.innerText = letter;
+                    
+                    const wrap = document.createElement('div');
+                    wrap.id = `wrap-select-letter-${letter}`;
+                    wrap.className = "cursor-pointer";
+                    wrap.appendChild(btn);
+                    wrap.onclick = () => {
+                        broadcastLiveTutorMessage('SELECTION_CHANGED', { filterType: 'alphabet', filterValue: letter });
+                        applyBuilderCategoryState('alphabet', letter);
+                    };
+                    abcGrid.appendChild(wrap);
+                }
+            }
+
+            const familiesGrid = document.getElementById('families-selector-grid');
+            if (familiesGrid) {
+                familiesGrid.innerHTML = '';
+                const defaultFamiliesList = ['at', 'an', 'og', 'ell', 'un', 'in', 'it', 'op', 'ug', 'ay'];
+                defaultFamiliesList.forEach(family => {
+                    const btn = document.createElement('button');
+                    btn.id = `select-family-${family}`;
+                    btn.className = "h-9 bg-slate-100 hover:bg-pink-50 hover:text-pink-700 font-kids text-xs font-bold text-slate-700 border-2 border-slate-200 hover:border-pink-400 rounded-xl transition w-full flex items-center justify-center uppercase shadow-sm pointer-events-none";
+                    btn.innerText = `-${family}`;
+
+                    const wrap = document.createElement('div');
+                    wrap.id = `wrap-select-family-${family}`;
+                    wrap.className = "cursor-pointer";
+                    wrap.appendChild(btn);
+                    wrap.onclick = () => {
+                        broadcastLiveTutorMessage('SELECTION_CHANGED', { filterType: 'family', filterValue: family });
+                        applyBuilderCategoryState('family', family);
+                    };
+                    familiesGrid.appendChild(wrap);
+                });
+            }
+        }
+
+        function applyBuilderCategoryState(type, value) {
+            document.querySelectorAll('#alphabets-selector-grid button, #families-selector-grid button').forEach(btn => {
+                btn.classList.remove('border-indigo-500', 'bg-indigo-100', 'text-indigo-800', 'border-pink-500', 'bg-pink-100', 'text-pink-800', 'scale-105');
+            });
+
+            selectedFilterType = type;
+            selectedFilterValue = value;
+            selectedImageIds = []; 
+
+            const targetId = type === 'alphabet' ? `select-letter-${value}` : `select-family-${value}`;
+            const targetBtn = document.getElementById(targetId);
+            if (targetBtn) {
+                targetBtn.classList.add(type === 'alphabet' ? 'border-indigo-500' : 'border-pink-500', type === 'alphabet' ? 'bg-indigo-100' : 'bg-pink-100', type === 'alphabet' ? 'text-indigo-800' : 'text-pink-800', 'scale-105');
+            }
+
+            const nextBtn = document.getElementById('step-1-next-btn');
+            if (nextBtn) {
+                nextBtn.disabled = false;
+                nextBtn.className = "bg-indigo-600 hover:bg-indigo-700 text-white font-kids text-xs px-5 py-2 rounded-xl transition shadow";
+                nextBtn.innerHTML = `Continue <i class="fa-solid fa-arrow-right ml-1"></i>`;
+            }
+        }
+
+        function renderStep2ImagesUI() {
+            const grid = document.getElementById('step-images-selection-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            const matchingImages = getMatchingImages(selectedFilterType, selectedFilterValue);
+            if (matchingImages.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full py-8 text-center text-slate-400">
+                        <span class="text-4xl block mb-2">😢</span>
+                        <p class="font-kids text-xs font-bold">No custom assets inside "images/" directory matches this phonetic label...</p>
+                    </div>`;
+                const step2Next = document.getElementById('step-2-next-btn');
+                if (step2Next) step2Next.disabled = true;
+                return;
+            }
+
+            if (selectedImageIds.length === 0) {
+                selectedImageIds = matchingImages.map(img => img.id);
+            }
+
+            matchingImages.forEach(img => {
+                const isSelected = selectedImageIds.includes(img.id);
+                const itemCard = document.createElement('div');
+                itemCard.id = `step2-card-${img.id}`;
+                itemCard.className = `cursor-pointer relative bg-slate-50 border-2 rounded-xl p-2 text-center transition flex flex-col justify-between items-center ${
+                    isSelected ? 'border-indigo-500 bg-indigo-50/20 shadow-sm' : 'border-slate-200 hover:border-indigo-300'
+                }`;
+
+                itemCard.innerHTML = `
+                    <div class="h-16 w-full bg-white rounded-lg flex items-center justify-center p-1 relative mb-1.5 shadow-inner pointer-events-none">
+                        <img class="max-w-full max-h-full object-contain">
+                        <div class="absolute top-1 right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-transparent'}">
+                            <i class="fa-solid fa-check"></i>
+                        </div>
+                    </div>
+                    <span class="font-kids text-[10px] font-bold text-slate-700 truncate w-full pointer-events-none">${img.word}</span>
+                `;
+
+                const imgNode = itemCard.querySelector('img');
+                applySmartImage(imgNode, img);
+
+                itemCard.onclick = () => {
+                    const idx = selectedImageIds.indexOf(img.id);
+                    let targetList = [...selectedImageIds];
+                    if (idx > -1) { targetList.splice(idx, 1); } else { targetList.push(img.id); }
+                    broadcastLiveTutorMessage('IMAGE_PICK_CHANGED', { selectedImageIds: targetList });
+                    selectedImageIds = targetList;
+                    renderStep2ImagesUI();
+                };
+                grid.appendChild(itemCard);
+            });
+            evaluateStep2NextButtonState();
+        }
+
+        function evaluateStep2NextButtonState() {
+            const nextBtn = document.getElementById('step-2-next-btn');
+            if (!nextBtn) return;
+            if (selectedImageIds.length > 0) {
+                nextBtn.disabled = false;
+                nextBtn.className = "bg-indigo-600 hover:bg-indigo-700 text-white font-kids text-xs px-5 py-2 rounded-xl transition shadow";
+                nextBtn.innerHTML = `Continue <i class="fa-solid fa-arrow-right ml-1"></i>`;
+            } else {
+                nextBtn.disabled = true;
+                nextBtn.className = "bg-indigo-400 text-white font-kids text-xs px-5 py-2 rounded-xl cursor-not-allowed transition";
+            }
+        }
+
+        function applyActivityStyleState(style) {
+            selectedStyle = style;
+            document.querySelectorAll('.style-card').forEach(card => {
+                card.classList.remove('border-indigo-500', 'bg-indigo-50/40', 'scale-102', 'ring-2', 'ring-indigo-400');
+            });
+            const styleMapping = ['know-words', 'missing-letter', 'trace-letter', 'circle-correct', 'match-pic-word', 'match-pic-correct-word', 'connect-rhyming'];
+            const targetIndex = styleMapping.indexOf(style);
+            const cardsList = document.querySelectorAll('.style-card');
+            if (targetIndex > -1 && cardsList[targetIndex]) {
+                cardsList[targetIndex].classList.add('border-indigo-500', 'bg-indigo-50/40', 'scale-102', 'ring-2', 'ring-indigo-400');
+            }
+        }
+
+        function triggerInstantWorksheetLaunch(style) {
+            selectedStyle = style;
+            broadcastLiveTutorMessage('WORKSHEET_LAUNCHED', { 
+                style: selectedStyle, 
+                imageIds: selectedImageIds,
+                selectedFilterType: selectedFilterType,
+                selectedFilterValue: selectedFilterValue
+            });
+            executeWorksheetSlideCompilation();
+        }
+    </script>
+
+    <script>
+        function getSafeImage(imgId) {
+            return library.find(x => x.id === imgId) || library[0];
+        }
+
+        function executeWorksheetSlideCompilation() {
+            strokeAnnotatorDb = [];
+            currentStrokePoints = [];
+            matchedNodeTraces = [];
+            temporaryLeftSelectedNodeId = null;
+            solvedPairsDeck = [];
+            activePairsSelected = [];
+
+            canvasScale = 1.0;
+            canvasPanX = 0;
+            canvasPanY = 0;
+            applyTransformStageOffsets();
+
+            let finalImageIds = [...selectedImageIds];
+            if (finalImageIds.length === 0) {
+                finalImageIds = getMatchingImages(selectedFilterType, selectedFilterValue).map(img => img.id);
+            }
+
+            const selectedImages = library.filter(img => finalImageIds.includes(img.id));
+            if (selectedImages.length === 0) return;
+
+            slideDeck = [];
+            if (['know-words', 'missing-letter', 'trace-letter', 'circle-correct'].includes(selectedStyle)) {
+                selectedImages.forEach(img => {
+                    slideDeck.push({ style: selectedStyle, images: [img] });
+                });
+            } else if (selectedStyle === 'match-pic-word' || selectedStyle === 'match-pic-correct-word' || selectedStyle === 'connect-rhyming') {
+                const chunkSize = 4;
+                for (let i = 0; i < selectedImages.length; i += chunkSize) {
+                    slideDeck.push({ style: selectedStyle, images: selectedImages.slice(i, i + chunkSize) });
+                }
+            }
+
+            currentSlideIndex = 0;
+            applyNavigationState('presentation');
+            renderSlidePresentationView();
+        }
+
+        function renderSlidePresentationView() {
+            const container = document.getElementById('worksheet-layout-target');
+            const linesSvg = document.getElementById('interactive-matching-lines');
+            if (!container || !linesSvg) return;
+
+            container.innerHTML = '';
+            linesSvg.innerHTML = '';
+
+            const activeSlide = slideDeck[currentSlideIndex];
+            if (!activeSlide) return;
+
+            const counter = document.getElementById('slide-index-counter');
+            if (counter) counter.innerText = `Slide ${currentSlideIndex + 1}/${slideDeck.length}`;
+
+            const slideImages = activeSlide.images || [];
+
+            switch (activeSlide.style) {
+                case 'know-words':
+                    renderSlideKnowWords(slideImages[0] || getSafeImage(null), container);
+                    break;
+                case 'missing-letter':
+                    renderSlideMissingLetter(slideImages[0] || getSafeImage(null), container);
+                    break;
+                case 'trace-letter':
+                    renderSlideTraceLetter(slideImages[0] || getSafeImage(null), container);
+                    break;
+                case 'circle-correct':
+                    renderSlideCircleCorrect(slideImages[0] || getSafeImage(null), container);
+                    break;
+                case 'match-pic-word':
+                    renderSlideMatchPicWord(slideImages.map(img => img || getSafeImage(null)), container);
+                    break;
+                case 'match-pic-correct-word':
+                    renderSlideMatchPicCorrectWord(slideImages.map(img => img || getSafeImage(null)), container);
+                    break;
+                case 'connect-rhyming':
+                    renderSlideConnectRhyming(slideImages.map(img => img || getSafeImage(null)), container);
+                    break;
+            }
+
+            setTimeout(() => {
+                recalculatePresentationCanvasBoundaries();
+            }, 100);
+        }
+
+        // --- 1. KNOW WORDS WORKSHEET VIEW ---
+        function renderSlideKnowWords(img, container) {
+            container.innerHTML = `
+                <div class="flex-1 w-full h-full flex flex-col justify-center items-center">
+                    <div class="h-[65%] w-full flex items-center justify-center p-4">
+                        <div class="h-56 w-56 bg-slate-50 border-4 border-dashed border-amber-300 rounded-3xl p-5 flex items-center justify-center shadow-md">
+                            <img id="active-worksheet-img" class="max-w-full max-h-full object-contain pointer-events-none">
+                        </div>
+                    </div>
+                    <div class="h-[20%] text-center flex flex-col justify-center">
+                        <span class="font-kids text-5xl font-bold text-slate-800 tracking-wide block uppercase leading-none">${img.word}</span>
+                    </div>
+                    <div class="h-[15%] text-center flex items-center justify-center">
+                        <span class="text-xs font-bold text-amber-500 uppercase tracking-widest block">Starts with letter: ${(img.category || 'A').toUpperCase()}</span>
+                    </div>
+                </div>
+            `;
+            applySmartImage(document.getElementById('active-worksheet-img'), img);
+        }
+
+        // --- 2. MISSING FIRST LETTER WORKSHEET VIEW ---
+        function renderSlideMissingLetter(img, container) {
+            const word = (img.word || 'Apple').toUpperCase();
+            const correctFirstLetter = word.charAt(0);
+            const restOfWord = word.slice(1);
+
+            container.innerHTML = `
+                <div class="flex-1 w-full h-full flex flex-col justify-center items-center">
+                    <div class="h-[60%] w-full flex items-center justify-center p-4">
+                        <div class="h-48 w-48 bg-slate-50 border-4 border-dashed border-emerald-300 rounded-3xl p-5 flex items-center justify-center shadow-md">
+                            <img id="active-worksheet-img" class="max-w-full max-h-full object-contain pointer-events-none">
+                        </div>
+                    </div>
+                    <div class="h-[25%] flex flex-col justify-center items-center gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-16 h-16 border-4 border-dashed border-emerald-400 bg-white rounded-2xl flex items-center justify-center font-kids text-4xl font-bold text-emerald-600 shadow-sm relative">
+                                <span class="absolute text-slate-300 opacity-45 font-kids font-light">?</span>
+                                <input type="text" maxlength="1" id="missing-input-slot" class="absolute inset-0 w-full h-full bg-transparent text-center font-kids text-3xl font-bold text-emerald-700 uppercase focus:outline-none z-10">
+                            </div>
+                            <span class="font-kids text-5xl font-bold text-slate-800 uppercase tracking-wide">${restOfWord}</span>
+                        </div>
+                        <button id="btn-reveal-letter" class="bg-indigo-50 border border-indigo-200 text-indigo-600 font-kids text-[10px] px-3 py-1 rounded-xl shadow-sm hover:bg-indigo-100 transition">Reveal Starting Letter</button>
+                    </div>
+                    <div class="h-[15%] text-center flex items-center justify-center">
+                        <p class="text-[10px] text-emerald-600 font-kids font-bold uppercase">Trace the starting letter or type it above!</p>
+                    </div>
+                </div>
+            `;
+            applySmartImage(document.getElementById('active-worksheet-img'), img);
+
+            const inputNode = container.querySelector('#missing-input-slot');
+            const revealBtn = container.querySelector('#btn-reveal-letter');
+
+            if (inputNode) {
+                inputNode.oninput = () => {
+                    const entered = inputNode.value.trim().toUpperCase();
+                    const isCorrect = (entered === correctFirstLetter);
+                    broadcastLiveTutorMessage('TEXT_ENTRY_SYNC', { value: entered, isCorrect });
+                    applyTextEntryValue(entered, isCorrect);
+                };
+            }
+            if (revealBtn) {
+                revealBtn.onclick = () => {
+                    broadcastLiveTutorMessage('TEXT_ENTRY_SYNC', { value: correctFirstLetter, isCorrect: true });
+                    applyTextEntryValue(correctFirstLetter, true);
+                };
+            }
+        }
+
+        function applyTextEntryValue(value, isCorrect) {
+            const slot = document.getElementById('missing-input-slot');
+            if (slot) {
+                slot.value = value;
+                const parent = slot.parentElement;
+                if (isCorrect) {
+                    parent.className = "w-16 h-16 border-4 border-emerald-500 bg-emerald-100 rounded-2xl flex items-center justify-center font-kids text-3xl font-bold text-emerald-700 shadow-sm animate-bounce";
+                    showInstantNotification("Superb spelling!");
+                } else if (value !== "") {
+                    parent.className = "w-16 h-16 border-4 border-red-500 bg-red-100 rounded-2xl flex items-center justify-center font-kids text-3xl font-bold text-red-700 shadow-sm";
+                } else {
+                    parent.className = "w-16 h-16 border-4 border-dashed border-emerald-400 bg-white rounded-2xl flex items-center justify-center font-kids text-4xl font-bold text-emerald-600 shadow-sm relative";
+                }
+            }
+        }
+
+        // --- 3. TRACE LETTER WORKSHEET VIEW ---
+        function renderSlideTraceLetter(img, container) {
+            const letter = (img.category || 'A').toUpperCase();
+            const guidesArray = Array(4).fill(letter);
+
+            container.innerHTML = `
+                <div class="flex-1 w-full h-full flex flex-col justify-center items-center">
+                    <div class="h-[55%] w-full flex items-center justify-center p-4">
+                        <div class="h-44 w-44 bg-slate-50 border-4 border-dashed border-pink-300 rounded-3xl p-5 flex items-center justify-center shadow-md">
+                            <img id="active-worksheet-img" class="max-w-full max-h-full object-contain pointer-events-none">
+                        </div>
+                    </div>
+                    <div class="h-[30%] flex flex-col justify-center items-center gap-1.5">
+                        <span class="text-xs font-bold text-pink-500 tracking-wider uppercase font-kids">Trace Guideline Patterns:</span>
+                        <div class="flex items-center gap-6 justify-center">
+                            ${guidesArray.map(char => `
+                                <span class="trace-font text-7xl select-none block capitalize opacity-25" style="border: 1px dashed #f472b6; padding: 4px 16px; border-radius: 12px; border-style: dotted;">${char}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="h-[15%] text-center flex items-center justify-center">
+                        <p class="text-[10px] text-pink-600 font-kids font-bold uppercase tracking-widest animate-pulse">Use your pen tool to trace the guidelines carefully!</p>
+                    </div>
+                </div>
+            `;
+            applySmartImage(document.getElementById('active-worksheet-img'), img);
+        }
+
+        // --- 4. CIRCLE CORRECT WORD WORKSHEET VIEW ---
+        function renderSlideCircleCorrect(img, container) {
+            const correct = (img.word || 'Cat').toUpperCase();
+            const fake1 = correct.replace(/.$/, 'G').replace(/.$/, 'K');
+            const fake2 = "P" + correct.slice(1);
+            const options = shuf(Array.from(new Set([correct, fake1, fake2])));
+
+            container.innerHTML = `
+                <div class="flex-1 w-full h-full flex flex-col justify-center items-center">
+                    <div class="h-[60%] w-full flex items-center justify-center p-4">
+                        <div class="h-44 w-44 bg-slate-50 border-4 border-dashed border-purple-300 rounded-3xl p-5 flex items-center justify-center shadow-md">
+                            <img id="active-worksheet-img" class="max-w-full max-h-full object-contain pointer-events-none">
+                        </div>
+                    </div>
+                    <div class="h-[25%] flex flex-wrap justify-center gap-4 w-full max-w-lg items-center">
+                        ${options.map((opt, i) => `
+                            <button id="choice-btn-${i}" class="bg-white border-3 border-slate-200 hover:border-purple-400 text-slate-700 font-kids text-xl px-8 py-2.5 rounded-full shadow-sm hover:shadow transition transform hover:scale-105 active:scale-95">
+                                ${opt}
+                            </button>
+                        `).join('')}
+                    </div>
+                    <div class="h-[15%] text-center flex items-center justify-center">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">Circle or Tap the correct word representation</p>
+                    </div>
+                </div>
+            `;
+            applySmartImage(document.getElementById('active-worksheet-img'), img);
+
+            options.forEach((opt, i) => {
+                const btn = container.querySelector(`#choice-btn-${i}`);
+                if (btn) {
+                    btn.onclick = () => {
+                        const isCorrect = (opt === correct);
+                        broadcastLiveTutorMessage('OPTION_SELECT_SYNC', { buttonId: `choice-btn-${i}`, isCorrect });
+                        applyChoiceOptionSelection(`choice-btn-${i}`, isCorrect);
+                    };
+                }
+            });
+        }
+
+        function applyChoiceOptionSelection(buttonId, isCorrect) {
+            const btn = document.getElementById(buttonId);
+            if (!btn) return;
+            if (isCorrect) {
+                btn.className = "bg-emerald-100 border-3 border-emerald-500 text-emerald-800 font-kids text-xl px-8 py-2.5 rounded-full shadow-md transition scale-105 font-bold animate-bounce";
+                showInstantNotification("Superb, that is correct!");
+            } else {
+                btn.className = "bg-red-100 border-3 border-red-400 text-red-700 font-kids text-xl px-8 py-2.5 rounded-full shadow-sm transition opacity-60";
+            }
+        }
+
+        // --- 5 & 6. MATCH PICTURE TO WORD WORKSHEETS ---
+        function renderSlideMatchPicWord(images, container) {
+            const leftCol = images;
+            const rightCol = shuf([...images]);
+
+            container.innerHTML = `
+                <div class="grid grid-cols-2 gap-24 items-center w-full max-w-2xl h-full py-4 relative z-10">
+                    <div class="space-y-4 flex flex-col justify-center h-full">
+                        ${leftCol.map(img => `
+                            <div id="node-left-${img.id}" class="match-node bg-slate-50 border-2 border-slate-200 rounded-2xl p-2.5 h-16 flex items-center justify-between shadow-sm relative pr-8">
+                                <img class="h-11 w-11 object-contain rounded bg-white pointer-events-none">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-4 font-kids">Picture</span>
+                                <div class="absolute -right-3 top-1/2 transform -translate-y-1/2 w-6 h-6 rounded-full bg-sky-400 border-4 border-white shadow-md flex items-center justify-center">
+                                    <div class="w-2 h-2 rounded-full bg-white"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="space-y-4 flex flex-col justify-center h-full font-kids">
+                        ${rightCol.map(img => `
+                            <div id="node-right-${img.id}" class="match-node bg-slate-50 border-2 border-slate-200 rounded-2xl p-2.5 h-16 flex items-center justify-start shadow-sm relative cursor-pointer hover:bg-sky-50 pl-8 font-kids">
+                                <div class="absolute -left-3 top-1/2 transform -translate-y-1/2 w-6 h-6 rounded-full bg-sky-400 border-4 border-white shadow-md flex items-center justify-center">
+                                    <div class="w-2 h-2 rounded-full bg-white"></div>
+                                </div>
+                                <span class="font-kids text-xl text-slate-800 font-bold capitalize select-none pointer-events-none">${img.word}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            leftCol.forEach(img => {
+                const node = container.querySelector(`#node-left-${img.id} img`);
+                applySmartImage(node, img);
+            });
+
+            setupMatchingNodeListeners(leftCol, rightCol);
+        }
+
+        // Match Pair (Tap to Lock Cards)
+        function renderSlideMatchPicCorrectWord(images, container) {
+            const cardDeck = shuf([
+                ...images.map(img => ({ ...img, isImage: true })),
+                ...images.map(img => ({ ...img, isImage: false }))
+            ]);
+
+            container.innerHTML = `
+                <div class="flex flex-col h-full w-full justify-between py-2">
+                    <div class="text-center shrink-0">
+                        <span class="text-xs font-bold text-teal-600 font-kids uppercase">Find Matching Pairs! Tap image and matching text card</span>
+                    </div>
+                    <div id="pair-matching-cards-matrix" class="grid grid-cols-4 gap-3.5 flex-1 items-center justify-center max-w-xl mx-auto w-full">
+                        ${cardDeck.map(card => {
+                            const isImg = card.isImage;
+                            const cardId = `pair-card-${isImg ? 'img' : 'txt'}-${card.id}`;
+                            return `
+                                <div id="${cardId}" class="card-pop bg-white border-3 border-slate-200 rounded-2xl p-3 h-28 flex flex-col items-center justify-center cursor-pointer hover:border-teal-400 hover:shadow shadow-sm">
+                                    ${isImg ? `
+                                        <img class="max-w-full max-h-full object-contain pointer-events-none">
+                                    ` : `
+                                        <span class="font-kids text-base font-extrabold text-slate-700 text-center uppercase select-none">${card.word}</span>
+                                    `}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+
+            cardDeck.forEach(card => {
+                if (card.isImage) {
+                    const node = container.querySelector(`#pair-card-img-${card.id} img`);
+                    applySmartImage(node, card);
+                }
+            });
+
+            // Bind click controllers
+            cardDeck.forEach(card => {
+                const id = `pair-card-${card.isImage ? 'img' : 'txt'}-${card.id}`;
+                const cardNode = container.querySelector(`#${id}`);
+                if (cardNode) {
+                    cardNode.onclick = () => {
+                        broadcastLiveTutorMessage('PAIR_SELECTION_SYNC', { cardId: id, isImage: card.isImage });
+                        applyPairCardHighlight(id, card.isImage);
+                    };
+                }
+            });
+        }
+
+        function applyPairCardHighlight(id, isImage) {
+            const card = document.getElementById(id);
+            if (!card || solvedPairsDeck.includes(id)) return;
+
+            if (card.classList.contains('ring-4')) {
+                card.classList.remove('ring-4', 'ring-teal-400');
+                activePairsSelected = activePairsSelected.filter(x => x.id !== id);
+                return;
+            }
+
+            card.classList.add('ring-4', 'ring-teal-400');
+            activePairsSelected.push({ id, isImage });
+
+            if (activePairsSelected.length === 2) {
+                const first = activePairsSelected[0];
+                const second = activePairsSelected[1];
+
+                const firstIdClean = first.id.replace('pair-card-img-', '').replace('pair-card-txt-', '');
+                const secondIdClean = second.id.replace('pair-card-img-', '').replace('pair-card-txt-', '');
+
+                if (first.isImage !== second.isImage && firstIdClean === secondIdClean) {
+                    // Match resolved
+                    broadcastLiveTutorMessage('PAIR_RESOLVED_SYNC', { left: first.id, right: second.id });
+                    solvedPairsDeck.push(first.id, second.id);
+                    rebuildPairMatchingState();
+                } else {
+                    // Mismatch
+                    setTimeout(() => {
+                        const c1 = document.getElementById(first.id);
+                        const c2 = document.getElementById(second.id);
+                        if (c1) c1.classList.remove('ring-4', 'ring-teal-400');
+                        if (c2) c2.classList.remove('ring-4', 'ring-teal-400');
+                    }, 500);
+                }
+                activePairsSelected = [];
+            }
+        }
+
+        function rebuildPairMatchingState() {
+            solvedPairsDeck.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.className = "bg-teal-50 border-3 border-teal-500 rounded-2xl p-3 h-28 flex flex-col items-center justify-center opacity-40 cursor-not-allowed select-none transition pointer-events-none";
+                    if (!el.querySelector('.pair-locked-badge')) {
+                        const icon = document.createElement('div');
+                        icon.className = "pair-locked-badge absolute top-1 right-1 text-teal-600 text-[10px]";
+                        icon.innerHTML = `<i class="fa-solid fa-circle-check"></i>`;
+                        el.appendChild(icon);
+                    }
+                }
+            });
+            if (solvedPairsDeck.length === slideDeck[currentSlideIndex].images.length * 2) {
+                showInstantNotification("All pairs matched perfectly!");
+            }
+        }
+
+        // --- 7. CONNECT RHYMING WORD FAMILY ---
+        function renderSlideConnectRhyming(images, container) {
+            const leftCol = images;
+            const rightCol = shuf([...images]);
+
+            container.innerHTML = `
+                <div class="grid grid-cols-2 gap-24 items-center w-full max-w-2xl h-full py-4 relative z-10">
+                    <div class="space-y-4 flex flex-col justify-center h-full">
+                        ${leftCol.map(img => `
+                            <div id="node-left-${img.id}" class="match-node bg-rose-50 border-2 border-rose-200 rounded-2xl p-2.5 h-16 flex items-center justify-between shadow-sm relative hover:bg-rose-100/50">
+                                <img class="h-11 w-11 object-contain rounded bg-white pointer-events-none">
+                                <span class="text-[10px] font-bold text-rose-500 uppercase tracking-wider mr-4 font-kids">Family -${img.category.toUpperCase()}</span>
+                                <div class="absolute -right-3 top-1/2 transform -translate-y-1/2 w-6 h-6 rounded-full bg-rose-400 border-4 border-white shadow-md flex items-center justify-center">
+                                    <div class="w-2 h-2 rounded-full bg-white"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="space-y-4 flex flex-col justify-center h-full">
+                        ${rightCol.map(img => `
+                            <div id="node-right-${img.id}" class="match-node bg-rose-50 border-2 border-rose-200 rounded-2xl p-2.5 h-16 flex items-center justify-start shadow-sm relative cursor-pointer hover:bg-rose-100/50 pl-8 font-kids">
+                                <div class="absolute -left-3 top-1/2 transform -translate-y-1/2 w-6 h-6 rounded-full bg-rose-400 border-4 border-white shadow-md flex items-center justify-center">
+                                    <div class="w-2 h-2 rounded-full bg-white"></div>
+                                </div>
+                                <div class="flex items-center gap-3 pointer-events-none">
+                                    <img class="h-10 w-10 object-contain rounded bg-white">
+                                    <span class="font-kids text-sm text-slate-800 font-bold capitalize select-none">-${img.category.toUpperCase()} word</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            leftCol.forEach(img => {
+                const node = container.querySelector(`#node-left-${img.id} img`);
+                applySmartImage(node, img);
+            });
+            rightCol.forEach(img => {
+                const node = container.querySelector(`#node-right-${img.id} img`);
+                applySmartImage(node, img);
+            });
+
+            setupMatchingNodeListeners(leftCol, rightCol);
+        }
+
+        function setupMatchingNodeListeners(leftCol, rightCol) {
+            leftCol.forEach(img => {
+                const node = document.getElementById(`node-left-${img.id}`);
+                if (node) {
+                    node.onclick = () => {
+                        document.querySelectorAll('[id^="node-left-"]').forEach(el => el.classList.remove('ring-4', 'ring-indigo-400'));
+                        temporaryLeftSelectedNodeId = `left-${img.id}`;
+                        node.classList.add('ring-4', 'ring-indigo-400');
+                    };
+                }
+            });
+
+            rightCol.forEach(img => {
+                const node = document.getElementById(`node-right-${img.id}`);
+                if (node) {
+                    node.onclick = () => {
+                        if (temporaryLeftSelectedNodeId) {
+                            const leftPart = temporaryLeftSelectedNodeId.split('-')[1];
+                            const rightPart = img.id;
+                            const colorValue = canvasColor === 'rainbow' ? 'hsl(180, 100%, 40%)' : canvasColor;
+                            
+                            broadcastLiveTutorMessage('NODE_CONNECT_SYNC', { 
+                                left: `left-${leftPart}`, 
+                                right: `right-${rightPart}`, 
+                                color: colorValue 
+                            });
+
+                            matchedNodeTraces.push({
+                                leftNodeId: `left-${leftPart}`,
+                                rightNodeId: `right-${rightPart}`,
+                                strokeColor: colorValue
+                            });
+                            rebuildSynchronizedMatchesOverlays();
+
+                            document.querySelectorAll('[id^="node-left-"]').forEach(el => el.classList.remove('ring-4', 'ring-indigo-400'));
+                            temporaryLeftSelectedNodeId = null;
+                        }
+                    };
+                }
+            });
+        }
+
+        function rebuildSynchronizedMatchesOverlays() {
+            const linesSvg = document.getElementById('interactive-matching-lines');
+            if (!linesSvg) return;
+            linesSvg.innerHTML = '';
+
+            const stage = document.getElementById('zoom-stage');
+            if (!stage) return;
+            const stageRect = stage.getBoundingClientRect();
+
+            matchedNodeTraces.forEach(conn => {
+                const leftNode = document.getElementById(`node-${conn.leftNodeId}`);
+                const rightNode = document.getElementById(`node-${conn.rightNodeId}`);
+
+                if (leftNode && rightNode) {
+                    const leftRect = leftNode.getBoundingClientRect();
+                    const rightRect = rightNode.getBoundingClientRect();
+
+                    const leftX = (leftRect.right - stageRect.left) / canvasScale;
+                    const leftY = (leftRect.top + leftRect.height / 2 - stageRect.top) / canvasScale;
+
+                    const rightX = (rightRect.left - stageRect.left) / canvasScale;
+                    const rightY = (rightRect.top + rightRect.height / 2 - stageRect.top) / canvasScale;
+
+                    const pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    pathElement.setAttribute("d", `M ${leftX} ${leftY} Q ${(leftX + rightX) / 2} ${(leftY + rightY) / 2 - 15} ${rightX} ${rightY}`);
+                    pathElement.setAttribute("stroke", conn.strokeColor);
+                    pathElement.setAttribute("stroke-width", "5");
+                    pathElement.setAttribute("fill", "none");
+                    pathElement.setAttribute("stroke-linecap", "round");
+                    pathElement.setAttribute("class", "sparkle-border");
+                    linesSvg.appendChild(pathElement);
+                }
+            });
+        }
+
+        // Procedural Sine wave oscillator chords to replace external audio files
+        function executeProceduralSpeechSynthesizer(letter) {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                
+                const osc1 = ctx.createOscillator();
+                const osc2 = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc1.type = 'triangle';
+                osc2.type = 'sine';
+
+                const chords = {
+                    'A': 440, 'B': 494, 'C': 523, 'D': 587, 'E': 659, 'F': 698,
+                    'G': 784, 'H': 880, 'I': 987, 'J': 1046, 'K': 1174, 'L': 1318,
+                    'M': 1396, 'N': 1568, 'O': 1760, 'P': 1975, 'Q': 2093, 'R': 2349,
+                    'S': 2637, 'T': 2793, 'U': 3135, 'V': 3520, 'W': 3951, 'X': 4186,
+                    'Y': 4698, 'Z': 5274
+                };
+
+                const base = chords[letter.toUpperCase()] || 440;
+                osc1.frequency.setValueAtTime(base, ctx.currentTime);
+                osc2.frequency.setValueAtTime(base * 1.5, ctx.currentTime);
+
+                gain.gain.setValueAtTime(0.12, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc1.start();
+                osc2.start();
+                osc1.stop(ctx.currentTime + 0.6);
+                osc2.stop(ctx.currentTime + 0.6);
+            } catch(e) {
+                console.warn('Audio contextual flow blocked:', e);
+            }
+        }
+    </script>
+
+    <script>
+        // Smooth Canvas drawing listeners
+        function setupDrawingListeners() {
+            const canvas = document.getElementById('presentation-drawing-canvas');
+            if (!canvas) return;
+
+            canvas.removeEventListener('pointerdown', handleDrawingPointerDown);
+            canvas.removeEventListener('pointermove', handleDrawingPointerMove);
+            canvas.removeEventListener('pointerup', handleDrawingPointerUp);
+            canvas.removeEventListener('pointerout', handleDrawingPointerUp);
+
+            canvas.addEventListener('pointerdown', handleDrawingPointerDown);
+            canvas.addEventListener('pointermove', handleDrawingPointerMove);
+            canvas.addEventListener('pointerup', handleDrawingPointerUp);
+            canvas.addEventListener('pointerout', handleDrawingPointerUp);
+        }
+
+        function calculateRelativeCanvasCoords(e) {
+            const canvas = document.getElementById('presentation-drawing-canvas');
+            if (!canvas) return { x: 0, y: 0 };
+            const rect = canvas.getBoundingClientRect();
+            const relX = (e.clientX - rect.left) / rect.width;
+            const relY = (e.clientY - rect.top) / rect.height;
+            return { x: relX, y: relY };
+        }
+
+        function handleDrawingPointerDown(e) {
+            if (e.pointerType === 'touch' && e.width > 24) return; // Palm rejection
+            
+            recalculatePresentationCanvasBoundaries();
+            e.preventDefault();
+            const canvas = document.getElementById('presentation-drawing-canvas');
+            if (canvas) {
+                try { canvas.setPointerCapture(e.pointerId); } catch(err) {}
+            }
+
+            const coords = calculateRelativeCanvasCoords(e);
+            drawingModeActive = true;
+            rainbowHueCounter = 0;
+            const startPt = { x: coords.x, y: coords.y };
+            if (canvasColor === 'rainbow') { startPt.hue = rainbowHueCounter; }
+            currentStrokePoints = [startPt];
+
+            broadcastLiveTutorMessage('DRAW_START', {
+                x: coords.x,
+                y: coords.y,
+                hue: startPt.hue,
+                color: canvasColor,
+                size: canvasBrushSize,
+                tool: canvasTool
+            });
+        }
+
+        function handleDrawingPointerMove(e) {
+            const coords = calculateRelativeCanvasCoords(e);
+            const hud = document.getElementById('coordinates-hud');
+            if (hud) hud.innerText = `X: ${coords.x.toFixed(2)}, Y: ${coords.y.toFixed(2)}`;
+
+            if (!drawingModeActive) return;
+
+            const movePt = { x: coords.x, y: coords.y };
+            if (canvasColor === 'rainbow') {
+                rainbowHueCounter = (rainbowHueCounter + 3) % 360;
+                movePt.hue = rainbowHueCounter;
+            }
+            currentStrokePoints.push(movePt);
+            repaintDrawingCanvas();
+
+            const now = Date.now();
+            if (now - lastDrawMsgTime > 30) {
+                broadcastLiveTutorMessage('DRAW_MOVE', { x: coords.x, y: coords.y, hue: movePt.hue });
+                lastDrawMsgTime = now;
+            }
+        }
+
+        function handleDrawingPointerUp(e) {
+            if (!drawingModeActive) return;
+            drawingModeActive = false;
+
+            const canvas = document.getElementById('presentation-drawing-canvas');
+            if (canvas) {
+                try { canvas.releasePointerCapture(e.pointerId); } catch(err) {}
+            }
+
+            if (currentStrokePoints.length > 0) {
+                strokeAnnotatorDb.push({
+                    color: canvasColor,
+                    size: canvasBrushSize,
+                    tool: canvasTool,
+                    points: [...currentStrokePoints]
+                });
+                currentStrokePoints = [];
+                repaintDrawingCanvas();
+
+                broadcastLiveTutorMessage('UNIVERSAL_DRAW', { strokes: strokeAnnotatorDb });
+            }
+        }
+
+        function paintStrokeOnContext(stroke, ctx, canvas) {
+            if (!stroke.points || stroke.points.length === 0) return;
+
+            ctx.beginPath();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            if (stroke.tool === 'erase') {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.lineWidth = stroke.size * 5;
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.lineWidth = stroke.size;
+            }
+
+            const isRainbowStroke = (stroke.color === 'rainbow');
+            const startX = stroke.points[0].x * canvas.width;
+            const startY = stroke.points[0].y * canvas.height;
+
+            if (stroke.points.length === 1) {
+                ctx.arc(startX, startY, stroke.size / 2, 0, Math.PI * 2);
+                ctx.fillStyle = stroke.tool === 'erase' ? 'rgba(0,0,0,1)' : (isRainbowStroke ? 'hsl(0, 100%, 50%)' : stroke.color);
+                ctx.fill();
+            } else {
+                if (isRainbowStroke) {
+                    for (let i = 1; i < stroke.points.length; i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(stroke.points[i-1].x * canvas.width, stroke.points[i-1].y * canvas.height);
+                        ctx.lineTo(stroke.points[i].x * canvas.width, stroke.points[i].y * canvas.height);
+                        
+                        const ptHue = stroke.points[i].hue !== undefined ? stroke.points[i].hue : 0;
+                        ctx.strokeStyle = `hsl(${ptHue}, 100%, 50%)`;
+                        ctx.stroke();
+                    }
+                } else {
+                    ctx.strokeStyle = stroke.color;
+                    ctx.moveTo(startX, startY);
+                    for (let i = 1; i < stroke.points.length; i++) {
+                        const nextX = stroke.points[i].x * canvas.width;
+                        const nextY = stroke.points[i].y * canvas.height;
+                        ctx.lineTo(nextX, nextY);
+                    }
+                    ctx.stroke();
+                }
+            }
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        function repaintDrawingCanvas() {
+            const canvas = document.getElementById('presentation-drawing-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            strokeAnnotatorDb.forEach(stroke => {
+                paintStrokeOnContext(stroke, ctx, canvas);
+            });
+
+            if (drawingModeActive && currentStrokePoints.length > 0) {
+                const tempStroke = {
+                    color: canvasColor,
+                    size: canvasBrushSize,
+                    tool: canvasTool,
+                    points: currentStrokePoints
+                };
+                paintStrokeOnContext(tempStroke, ctx, canvas);
+            }
+        }
+
+        function applyTransformStageOffsets() {
+            const stage = document.getElementById('zoom-stage');
+            if (stage) {
+                stage.style.transform = `translate(${canvasPanX}px, ${canvasPanY}px) scale(${canvasScale})`;
+            }
+            const zoomBadge = document.getElementById('zoom-badge');
+            if (zoomBadge) zoomBadge.innerText = `${Math.round(canvasScale * 100)}%`;
+            rebuildSynchronizedMatchesOverlays();
+        }
+
+        function executeClearAnnotationsCommand() {
+            strokeAnnotatorDb = [];
+            matchedNodeTraces = [];
+            temporaryLeftSelectedNodeId = null;
+            solvedPairsDeck = [];
+            activePairsSelected = [];
+            repaintDrawingCanvas();
+            rebuildSynchronizedMatchesOverlays();
+            
+            // Re-render matching game structures to unlock state cards
+            const activeSlide = slideDeck[currentSlideIndex];
+            if (activeSlide && activeSlide.style === 'match-pic-correct-word') {
+                renderSlidePresentationView();
+            }
+        }
+
+        function applyCanvasStrokeColor(color) {
+            canvasColor = color;
+            applyCanvasInteractiveTool('draw');
+
+            document.querySelectorAll('.color-dot').forEach(dot => {
+                dot.classList.remove('active-brush');
+            });
+
+            if (color === 'rainbow') {
+                const rb = document.getElementById('color-dot-rainbow');
+                if (rb) rb.classList.add('active-brush');
+            } else {
+                const mapping = {
+                    '#ef4444': 'color-dot-red',
+                    '#3b82f6': 'color-dot-blue',
+                    '#10b981': 'color-dot-green',
+                    '#f59e0b': 'color-dot-yellow',
+                    '#000000': 'color-dot-black'
+                };
+                const id = mapping[color];
+                if (id) {
+                    const dot = document.getElementById(id);
+                    if (dot) dot.classList.add('active-brush');
+                }
+            }
+        }
+
+        function applyCanvasInteractiveTool(mode) {
+            canvasTool = mode;
+            const canvas = document.getElementById('presentation-drawing-canvas');
+            if (canvas) {
+                canvas.style.pointerEvents = 'auto'; // ALWAYS ON! Pointer events remain unlocked.
+            }
+
+            const pen = document.getElementById('tool-draw-btn');
+            const erase = document.getElementById('tool-erase-btn');
+
+            if (pen && erase) {
+                pen.className = "text-[9px] font-bold px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1 transition";
+                erase.className = "text-[9px] font-bold px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1 transition";
+
+                if (mode === 'draw') {
+                    pen.className = "text-[9px] font-bold px-2.5 py-1 rounded-lg bg-white text-indigo-700 shadow-sm flex items-center gap-1 transition";
+                } else if (mode === 'erase') {
+                    erase.className = "text-[9px] font-bold px-2.5 py-1 rounded-lg bg-white text-indigo-700 shadow-sm flex items-center gap-1 transition";
+                }
+            }
+        }
+    </script>
+
+    <script>
+        function renderLibraryItemsUI() {
+            const grid = document.getElementById('library-items-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            library.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "bg-slate-50 border border-slate-200 rounded-xl p-2 flex flex-col justify-between relative group hover:border-pink-400 transition shadow-sm h-36";
+                card.innerHTML = `
+                    <div class="h-20 bg-white rounded-lg flex items-center justify-center overflow-hidden mb-1 p-1 relative cursor-pointer" onclick="showAssetInstantPreview('${item.id}')">
+                        <span class="absolute top-1 left-1 bg-slate-900/10 backdrop-blur-sm text-slate-800 text-[8px] font-extrabold px-1 py-0.2 rounded uppercase">${item.category || 'N/A'}</span>
+                        <img class="max-w-full max-h-full object-contain pointer-events-none">
+                    </div>
+                    <div class="min-w-0 text-center">
+                        <h4 class="font-kids text-[10px] font-bold text-slate-800 truncate leading-tight">${item.word}</h4>
+                        <p class="text-[8px] text-slate-400 truncate">images/${item.searchName}</p>
+                    </div>
+                `;
+                const imgNode = card.querySelector('img');
+                applySmartImage(imgNode, item);
+                grid.appendChild(card);
+            });
+        }
+
+        function showAssetInstantPreview(id) {
+            const item = library.find(x => x.id === id);
+            if (!item) return;
+
+            const panel = document.getElementById('image-instant-preview-panel');
+            const imgNode = document.getElementById('instant-preview-image-node');
+            const titleNode = document.getElementById('instant-preview-title-node');
+
+            if (imgNode && titleNode && panel) {
+                applySmartImage(imgNode, item);
+                titleNode.innerText = `${item.word} (-${item.category || 'N/A'})`;
+                panel.classList.remove('hidden');
+            }
+        }
+
+        function filterLibraryCollection() {
+            const queryNode = document.getElementById('library-search-input');
+            if (!queryNode) return;
+            const query = queryNode.value.toLowerCase().trim();
+            const cards = document.querySelectorAll('#library-items-grid > div');
+
+            library.forEach((item, index) => {
+                const card = cards[index];
+                if (!card) return;
+
+                const sName = item.searchName ? item.searchName.toLowerCase() : '';
+                const cat = item.category ? item.category.toLowerCase() : '';
+                const wrd = item.word ? item.word.toLowerCase() : '';
+
+                const isMatch = wrd.includes(query) || sName.includes(query) || cat.includes(query);
+                card.style.display = isMatch ? 'flex' : 'none';
+            });
+        }
+    </script>
+
+    <script>
+        function showInstantNotification(msg) {
+            const prev = document.getElementById('phonics-toast');
+            if (prev) prev.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'phonics-toast';
+            toast.className = "fixed bottom-12 left-1/2 transform -translate-x-1/2 bg-slate-900/90 text-white font-kids text-xs px-4 py-2.5 rounded-2xl shadow-lg z-50 flex items-center gap-1.5";
+            toast.innerHTML = `<span class="text-base">⭐</span> ${msg}`;
+            document.body.appendChild(toast);
+
+            setTimeout(() => { if (toast) toast.remove(); }, 2500);
+        }
+
+        function setDefensiveClickListener(id, callback) {
+            const el = document.getElementById(id);
+            if (el) el.onclick = (e) => callback(e);
+        }
+
+        function setupDirectActionListeners() {
+            setDefensiveClickListener('btn-home-builder', () => {
+                broadcastLiveTutorMessage('NAVIGATE_VIEW', { screen: 'builder' });
+                applyNavigationState('builder');
+            });
+            setDefensiveClickListener('btn-home-library', () => {
+                broadcastLiveTutorMessage('NAVIGATE_VIEW', { screen: 'library' });
+                applyNavigationState('library');
+                renderLibraryItemsUI();
+            });
+            setDefensiveClickListener('global-home-btn', () => {
+                broadcastLiveTutorMessage('NAVIGATE_VIEW', { screen: 'home' });
+                applyNavigationState('home');
+            });
+            setDefensiveClickListener('btn-library-back-home', () => {
+                broadcastLiveTutorMessage('NAVIGATE_VIEW', { screen: 'home' });
+                applyNavigationState('home');
+            });
+
+            const searchInput = document.getElementById('library-search-input');
+            if (searchInput) {
+                searchInput.oninput = () => filterLibraryCollection();
+            }
+
+            setDefensiveClickListener('btn-builder-cancel', () => {
+                broadcastLiveTutorMessage('NAVIGATE_VIEW', { screen: 'home' });
+                applyNavigationState('home');
+            });
+            setDefensiveClickListener('step-1-next-btn', () => {
+                broadcastLiveTutorMessage('WIZARD_STEP_CHANGE', { step: 2, selectedFilterType, selectedFilterValue });
+                applyWizardStepState(2);
+            });
+            setDefensiveClickListener('btn-step-2-back', () => {
+                broadcastLiveTutorMessage('WIZARD_STEP_CHANGE', { step: 1, selectedFilterType, selectedFilterValue });
+                applyWizardStepState(1);
+            });
+            setDefensiveClickListener('step-2-next-btn', () => {
+                broadcastLiveTutorMessage('WIZARD_STEP_CHANGE', { step: 3, selectedFilterType, selectedFilterValue });
+                applyWizardStepState(3);
+            });
+            setDefensiveClickListener('btn-step-3-back', () => {
+                broadcastLiveTutorMessage('WIZARD_STEP_CHANGE', { step: 2, selectedFilterType, selectedFilterValue });
+                applyWizardStepState(2);
+            });
+
+            // Template selector bindings
+            setDefensiveClickListener('btn-style-know-words', () => {
+                broadcastLiveTutorMessage('STYLE_SELECTED', { style: 'know-words' });
+                applyActivityStyleState('know-words');
+                triggerInstantWorksheetLaunch('know-words');
+            });
+            setDefensiveClickListener('btn-style-missing-letter', () => {
+                broadcastLiveTutorMessage('STYLE_SELECTED', { style: 'missing-letter' });
+                applyActivityStyleState('missing-letter');
+                triggerInstantWorksheetLaunch('missing-letter');
+            });
+            setDefensiveClickListener('btn-style-trace-letter', () => {
+                broadcastLiveTutorMessage('STYLE_SELECTED', { style: 'trace-letter' });
+                applyActivityStyleState('trace-letter');
+                triggerInstantWorksheetLaunch('trace-letter');
+            });
+            setDefensiveClickListener('btn-style-circle-correct', () => {
+                broadcastLiveTutorMessage('STYLE_SELECTED', { style: 'circle-correct' });
+                applyActivityStyleState('circle-correct');
+                triggerInstantWorksheetLaunch('circle-correct');
+            });
+            setDefensiveClickListener('btn-style-match-pic-word', () => {
+                broadcastLiveTutorMessage('STYLE_SELECTED', { style: 'match-pic-word' });
+                applyActivityStyleState('match-pic-word');
+                triggerInstantWorksheetLaunch('match-pic-word');
+            });
+            setDefensiveClickListener('btn-style-match-pic-correct-word', () => {
+                broadcastLiveTutorMessage('STYLE_SELECTED', { style: 'match-pic-correct-word' });
+                applyActivityStyleState('match-pic-correct-word');
+                triggerInstantWorksheetLaunch('match-pic-correct-word');
+            });
+            setDefensiveClickListener('btn-style-connect-rhyming', () => {
+                broadcastLiveTutorMessage('STYLE_SELECTED', { style: 'connect-rhyming' });
+                applyActivityStyleState('connect-rhyming');
+                triggerInstantWorksheetLaunch('connect-rhyming');
+            });
+
+            setDefensiveClickListener('btn-select-all-images', () => {
+                const matching = getMatchingImages(selectedFilterType, selectedFilterValue).map(img => img.id);
+                broadcastLiveTutorMessage('IMAGE_PICK_CHANGED', { selectedImageIds: matching });
+                selectedImageIds = matching;
+                renderStep2ImagesUI();
+            });
+
+            setDefensiveClickListener('btn-deselect-all-images', () => {
+                broadcastLiveTutorMessage('IMAGE_PICK_CHANGED', { selectedImageIds: [] });
+                selectedImageIds = [];
+                renderStep2ImagesUI();
+            });
+
+            setDefensiveClickListener('btn-presentation-exit', () => {
+                broadcastLiveTutorMessage('EXIT_WORKSHEET', null);
+                applyNavigationState('builder');
+            });
+
+            // Color palette mappings
+            setDefensiveClickListener('color-dot-red', () => {
+                broadcastLiveTutorMessage('UNIVERSAL_SELECTION', { selectionType: 'color', val: '#ef4444' });
+                applyCanvasStrokeColor('#ef4444');
+            });
+            setDefensiveClickListener('color-dot-blue', () => {
+                broadcastLiveTutorMessage('UNIVERSAL_SELECTION', { selectionType: 'color', val: '#3b82f6' });
+                applyCanvasStrokeColor('#3b82f6');
+            });
+            setDefensiveClickListener('color-dot-green', () => {
+                broadcastLiveTutorMessage('UNIVERSAL_SELECTION', { selectionType: 'color', val: '#10b981' });
+                applyCanvasStrokeColor('#10b981');
+            });
+            setDefensiveClickListener('color-dot-yellow', () => {
+                broadcastLiveTutorMessage('UNIVERSAL_SELECTION', { selectionType: 'color', val: '#f59e0b' });
+                applyCanvasStrokeColor('#f59e0b');
+            });
+            setDefensiveClickListener('color-dot-black', () => {
+                broadcastLiveTutorMessage('UNIVERSAL_SELECTION', { selectionType: 'color', val: '#000000' });
+                applyCanvasStrokeColor('#000000');
+            });
+            setDefensiveClickListener('color-dot-rainbow', () => {
+                broadcastLiveTutorMessage('UNIVERSAL_SELECTION', { selectionType: 'color', val: 'rainbow' });
+                applyCanvasStrokeColor('rainbow');
+            });
+
+            setDefensiveClickListener('tool-draw-btn', () => {
+                broadcastLiveTutorMessage('UNIVERSAL_SELECTION', { selectionType: 'tool', val: 'draw' });
+                applyCanvasInteractiveTool('draw');
+            });
+            setDefensiveClickListener('tool-erase-btn', () => {
+                broadcastLiveTutorMessage('UNIVERSAL_SELECTION', { selectionType: 'tool', val: 'erase' });
+                applyCanvasInteractiveTool('erase');
+            });
+
+            setDefensiveClickListener('btn-zoom-in', () => {
+                const target = Math.min(canvasScale * 1.15, 4.0);
+                broadcastLiveTutorMessage('UNIVERSAL_DRAG', { scale: target, panX: canvasPanX, panY: canvasPanY });
+                canvasScale = target;
+                applyTransformStageOffsets();
+            });
+            setDefensiveClickListener('btn-zoom-out', () => {
+                const target = Math.max(canvasScale * 0.85, 0.5);
+                broadcastLiveTutorMessage('UNIVERSAL_DRAG', { scale: target, panX: canvasPanX, panY: canvasPanY });
+                canvasScale = target;
+                applyTransformStageOffsets();
+            });
+            setDefensiveClickListener('btn-zoom-reset', () => {
+                broadcastLiveTutorMessage('UNIVERSAL_DRAG', { scale: 1.0, panX: 0, panY: 0 });
+                canvasScale = 1.0;
+                canvasPanX = 0;
+                canvasPanY = 0;
+                applyTransformStageOffsets();
+            });
+
+            setDefensiveClickListener('btn-sound-play', () => {
+                const alphabet = selectedFilterValue ? selectedFilterValue.toUpperCase() : 'A';
+                broadcastLiveTutorMessage('PLAY_AUDIO_SYNC', { letter: alphabet });
+                executeProceduralSpeechSynthesizer(alphabet);
+            });
+
+            setDefensiveClickListener('btn-draw-undo', () => {
+                if (strokeAnnotatorDb.length > 0) {
+                    const list = [...strokeAnnotatorDb];
+                    list.pop();
+                    broadcastLiveTutorMessage('UNIVERSAL_DRAW', { strokes: list });
+                    strokeAnnotatorDb = list;
+                    repaintDrawingCanvas();
+                }
+            });
+            setDefensiveClickListener('btn-draw-clear', () => {
+                broadcastLiveTutorMessage('UNIVERSAL_RESET', null);
+                executeClearAnnotationsCommand();
+            });
+
+            setDefensiveClickListener('btn-prev-slide', () => {
+                const target = Math.max(currentSlideIndex - 1, 0);
+                if (target !== currentSlideIndex) {
+                    broadcastLiveTutorMessage('SLIDE_NAVIGATE', { index: target });
+                    currentSlideIndex = target;
+                    renderSlidePresentationView();
+                }
+            });
+            setDefensiveClickListener('btn-next-slide', () => {
+                const target = Math.min(currentSlideIndex + 1, slideDeck.length - 1);
+                if (target !== currentSlideIndex) {
+                    broadcastLiveTutorMessage('SLIDE_NAVIGATE', { index: target });
+                    currentSlideIndex = target;
+                    renderSlidePresentationView();
+                }
+            });
+        }
+
+        // Auto Load Local Manifest File (images/manifest.json)
+        async function loadManifestLibrary() {
+            try {
+                const response = await fetch('images/manifest.json');
+                if (response.ok) {
+                    const manifest = await response.json();
+                    const loadedList = manifest.map(item => {
+                        const cleanId = item.name.toLowerCase().replace(/\./g, '-').replace(/\s+/g, '-');
+                        return {
+                            id: 'manifest-' + cleanId,
+                            searchName: item.name.toLowerCase(),
+                            category: item.category.toLowerCase(),
+                            word: item.word,
+                            fallbackSvg: item.fallbackSvg || '🍎'
+                        };
+                    });
+                    
+                    if (loadedList.length > 0) {
+                        const existingIds = new Set(library.map(x => x.id));
+                        loadedList.forEach(item => {
+                            if (!existingIds.has(item.id)) {
+                                library.push(item);
+                                existingIds.add(item.id);
+                            }
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn("Manifest loading skipped or failed. Using default offline database.");
+            }
+        }
+
+        window.onload = async function() {
+            setupStageResizeObservers();
+            await loadManifestLibrary();
+            setupDirectActionListeners();
+            applyNavigationState('home');
+            applyCanvasStrokeColor('#ef4444');
+        };
+    </script>
+</body>
+</html>

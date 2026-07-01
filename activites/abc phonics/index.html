@@ -1,0 +1,1750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LiveTutor Phonics - Fullscreen Curriculum</title>
+  
+  <!-- Fonts Setup: Fredoka for headings, Nunito for UI body -->
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Icons Support -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Tailwind CSS Framework CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0f172a; /* Slate-900 outside scaled view */
+      font-family: 'Nunito', sans-serif;
+      user-select: none;
+    }
+    
+    .font-fredoka {
+      font-family: 'Fredoka', sans-serif;
+    }
+
+    /* Scrollbars optimization */
+    .scroll-container::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .scroll-container::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 9999px;
+    }
+    .scroll-container::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.3);
+      border-radius: 9999px;
+    }
+    .scroll-container::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.5);
+    }
+
+    /* Kid friendly active tab scale effects */
+    .active-pop {
+      transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .active-pop:active {
+      transform: scale(0.92);
+    }
+
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- MASTER SCALE CONTAINER (Centered immersive experience) -->
+  <div id="app" class="relative bg-slate-900 overflow-hidden flex flex-col transition-all duration-300 mx-auto select-none">
+    
+    <!-- 1. KID-FRIENDLY UTILITY HEADER BAR -->
+    <header class="h-[64px] bg-slate-950 px-4 flex items-center justify-between text-white border-b border-slate-850 shrink-0 z-50">
+      
+      <!-- Current Alphabet Status with custom grid trigger -->
+      <div class="flex items-center space-x-3">
+        <!-- Floating Alphabet Bubble -->
+        <div onclick="toggleLetterGrid()" class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-500 to-indigo-600 shadow-md flex items-center justify-center cursor-pointer active-pop ring-4 ring-purple-500/20">
+          <span id="active-letter-bubble" class="font-fredoka text-2xl font-black text-white">A</span>
+        </div>
+        <div class="flex flex-col">
+          <div class="flex items-center space-x-1.5">
+            <span class="font-fredoka text-sm font-bold tracking-wide">Phonics Playground</span>
+            <i class="fa-solid fa-chevron-down text-[10px] text-purple-400 cursor-pointer" onclick="toggleLetterGrid()"></i>
+          </div>
+          <span class="text-[9px] text-purple-300 font-bold uppercase tracking-widest">Live Sync Connected</span>
+        </div>
+      </div>
+
+      <!-- Module Sequence Tracker (Interactive Curriculum Trail) -->
+      <div class="hidden md:flex items-center space-x-1 bg-slate-900 p-1.5 rounded-2xl border border-slate-800">
+        <button id="trail-know" onclick="bcast('SET_MOD', { mod: 'know' }); apply('SET_MOD', { mod: 'know' });" class="px-3 py-1.5 rounded-xl text-xs font-bold font-fredoka flex items-center space-x-1 transition">
+          <span>📖 Know</span>
+        </button>
+        <div class="text-slate-600 text-xs font-bold">➔</div>
+        <button id="trail-missing" onclick="bcast('SET_MOD', { mod: 'missing' }); apply('SET_MOD', { mod: 'missing' });" class="px-3 py-1.5 rounded-xl text-xs font-bold font-fredoka flex items-center space-x-1 transition">
+          <span>🧩 Missing</span>
+        </button>
+        <div class="text-slate-600 text-xs font-bold">➔</div>
+        <button id="trail-circle" onclick="bcast('SET_MOD', { mod: 'circle' }); apply('SET_MOD', { mod: 'circle' });" class="px-3 py-1.5 rounded-xl text-xs font-bold font-fredoka flex items-center space-x-1 transition">
+          <span>🎯 Circle</span>
+        </button>
+        <div class="text-slate-600 text-xs font-bold">➔</div>
+        <button id="trail-drag" onclick="bcast('SET_MOD', { mod: 'drag' }); apply('SET_MOD', { mod: 'drag' });" class="px-3 py-1.5 rounded-xl text-xs font-bold text-left transition-all">
+          <i class="fa-solid fa-link text-xs mr-1"></i><span>Match</span>
+        </button>
+        <div class="text-slate-600/50">·</div>
+        <button id="mod-trace" onclick="bcast('SET_MOD', { mod: 'trace' }); apply('SET_MOD', { mod: 'trace' });" class="w-8 h-8 rounded-xl flex items-center justify-center transition" title="Letter Tracing">
+          <i class="fa-solid fa-pen-fancy"></i>
+        </button>
+        <button id="mod-test" onclick="bcast('SET_MOD', { mod: 'test' }); apply('SET_MOD', { mod: 'test' });" class="w-8 h-8 rounded-xl flex items-center justify-center transition" title="Phonics Quiz">
+          <i class="fa-solid fa-graduation-cap"></i>
+        </button>
+      </div>
+
+      <!-- Tutor Pen & Tool controls -->
+      <div class="flex items-center space-x-2">
+        <label class="p-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-xl cursor-pointer text-slate-300 hover:text-white transition flex items-center space-x-1.5 active-pop">
+          <i class="fa-solid fa-folder-open text-xs"></i>
+          <span class="text-[10px] font-bold">Drop Assets</span>
+          <input type="file" id="bulk-image-upload" multiple accept="image/*" class="hidden" onchange="handleBulkUpload(event)">
+        </label>
+        
+        <!-- Smart Draw Tool Panel Toggle -->
+        <button onclick="toggleOverlayToolsMenu()" class="w-10 h-10 bg-slate-900 border border-slate-800 text-purple-400 hover:text-purple-300 rounded-xl flex items-center justify-center active-pop">
+          <i class="fa-solid fa-pen-nib"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. POPUPS & OVERLAYS -->
+    <!-- Collapsible Kid-Friendly Alphabet Grid Dropdown -->
+    <div id="dropdown-letter-grid" class="absolute top-[70px] left-4 bg-slate-950/95 border border-slate-800 rounded-3xl p-4 shadow-2xl z-[100] max-w-sm hidden">
+      <div class="text-xs text-purple-400 font-fredoka font-black uppercase mb-2 tracking-widest text-center">Choose Any Letter</div>
+      <div id="alphabet-grid-content" class="grid grid-cols-5 gap-2 max-h-[220px] overflow-y-auto scroll-container">
+        <!-- Built programmatically -->
+      </div>
+    </div>
+
+    <!-- Tutor Drawing Interactive Tool Strip -->
+    <div id="tutor-draw-panel" class="absolute top-20 right-4 bg-slate-950/95 border border-slate-850 p-2.5 rounded-2xl shadow-xl z-[100] hidden flex flex-col space-y-2">
+      <div class="text-[9px] text-slate-400 font-bold tracking-wider text-center border-b border-slate-850 pb-1.5 uppercase">Tutor Tools</div>
+      <!-- Tool selection keys -->
+      <button onclick="bcast('SET_INK_TOOL', { tool: 'pen' }); apply('SET_INK_TOOL', { tool: 'pen' });" id="tool-pen" class="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition"></button>
+      <button onclick="bcast('SET_INK_TOOL', { tool: 'highlighter' }); apply('SET_INK_TOOL', { tool: 'highlighter' });" id="tool-highlighter" class="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition"></button>
+      <button onclick="bcast('SET_INK_TOOL', { tool: 'eraser' }); apply('SET_INK_TOOL', { tool: 'eraser' });" id="tool-eraser" class="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition"></button>
+      <div class="border-t border-slate-850 my-1"></div>
+      <button onclick="bcast('CLEAR_UNIVERSAL_DRAW'); apply('CLEAR_UNIVERSAL_DRAW');" class="w-9 h-9 bg-rose-600 hover:bg-rose-500 rounded-xl flex items-center justify-center text-white active-pop text-xs" title="Clear Drawn Board">
+        <i class="fa-solid fa-trash-can"></i>
+      </button>
+    </div>
+
+    <!-- 3. MAIN CONTENTS VIEWSPACE (Takes full screen size) -->
+    <div id="content-area" class="flex-1 overflow-hidden relative bg-slate-50">
+      
+      <!-- MODULE 1: KNOW WORDS VIEW (Fullscreen 70-20-10 layout) -->
+      <div id="view-know" class="absolute inset-0 p-4 flex flex-col justify-between hidden select-none">
+        
+        <!-- Large Interactive Focal Illustration Container (70%) -->
+        <div class="flex-[7] flex items-center justify-center relative w-full mt-2">
+          <div id="know-card-trigger" class="w-full max-w-xl h-full max-h-[380px] bg-white rounded-3xl shadow-xl border-4 border-slate-200 flex flex-col items-center justify-center p-6 cursor-pointer transform hover:scale-101 transition-all active-pop relative">
+            <div class="absolute top-4 left-6 flex items-center space-x-1 text-slate-400">
+              <span class="text-sm font-bold">Alphabet</span>
+              <span class="font-fredoka text-2xl font-black text-purple-600 active-letter-lbl">A</span>
+            </div>
+            
+            <div class="absolute top-4 right-6 w-11 h-11 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center shadow-inner">
+              <i class="fa-solid fa-volume-high text-lg"></i>
+            </div>
+
+            <div id="know-visual-container" class="flex flex-col items-center justify-center w-full h-[220px]">
+              <!-- Dynamically mapped images or drop guides -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Word Pronunciation Block (20%) -->
+        <div class="flex-[2] flex flex-col justify-center items-center text-center py-2 shrink-0">
+          <span id="know-phonics-label" class="text-sm text-slate-400 font-bold lowercase tracking-wide">aaa</span>
+          <div id="know-vocab-word" class="font-fredoka text-5xl sm:text-6xl font-black text-slate-800 tracking-wide mt-1">Apple</div>
+        </div>
+
+        <!-- Synchronized Word Thumbnail Carousel Strip (Inside 10%) -->
+        <div class="flex-[1] flex flex-col justify-end">
+          <div id="know-carousel-strip" class="flex justify-center space-x-3 mb-2">
+            <!-- Dynamic thumbnails filled by JavaScript -->
+          </div>
+
+          <!-- Slide Navigations -->
+          <div class="flex justify-between items-center max-w-lg mx-auto w-full font-fredoka px-4">
+            <button onclick="bcast('NAV_WORD_PREV'); apply('NAV_WORD_PREV');" class="px-5 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-2xl active-pop flex items-center space-x-2 text-sm transition shadow-sm">
+              <i class="fa-solid fa-arrow-left"></i> <span>Prev Word</span>
+            </button>
+            <span id="know-deck-counter" class="text-slate-500 font-extrabold tracking-wide text-sm">Word 1 of 5</span>
+            <button onclick="bcast('NAV_WORD_NEXT_OR_FLOW'); apply('NAV_WORD_NEXT_OR_FLOW');" class="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl active-pop flex items-center space-x-2 text-sm transition shadow-sm">
+              <span>Next</span> <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODULE 2: MISSING FIRST LETTER VIEW (Fullscreen slide) -->
+      <div id="view-missing" class="absolute inset-0 p-4 flex flex-col justify-between hidden select-none">
+        
+        <!-- Large 300px centered illustration -->
+        <div class="flex-1 flex flex-col items-center justify-center py-2">
+          <div class="w-full max-w-lg bg-white rounded-3xl shadow-xl border border-slate-200 p-6 flex flex-col items-center">
+            
+            <div class="w-full h-[200px] rounded-2xl bg-slate-50 flex items-center justify-center p-3 mb-4 border border-slate-100 shadow-inner">
+              <div id="missing-prob-container" class="max-h-full max-w-full flex items-center justify-center">
+                <!-- Image card -->
+              </div>
+            </div>
+
+            <!-- Giant Spelling blank -->
+            <div class="font-fredoka text-5xl sm:text-6xl font-extrabold tracking-widest text-slate-800 mb-6 flex items-center space-x-1.5">
+              <span id="missing-blank-indicator" class="border-b-4 border-slate-800 w-14 text-center text-purple-600 animate-bounce">_</span>
+              <span id="missing-rest-word" class="uppercase">PPLE</span>
+            </div>
+
+            <!-- Choice Grid of Bubble Buttons -->
+            <div id="missing-options-grid" class="grid grid-cols-4 gap-4 w-full">
+              <!-- Dynamically populated buttons -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Carousel navigation -->
+        <div class="shrink-0 pb-2">
+          <div id="missing-carousel-strip" class="flex justify-center space-x-3 mb-2"></div>
+          <div class="flex justify-between items-center max-w-lg mx-auto w-full font-fredoka px-4">
+            <button onclick="bcast('NAV_WORD_PREV'); apply('NAV_WORD_PREV');" class="px-5 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-2xl active-pop flex items-center space-x-2 text-sm transition shadow-sm">
+              <i class="fa-solid fa-arrow-left"></i> <span>Prev Word</span>
+            </button>
+            <span id="missing-deck-counter" class="text-slate-500 font-extrabold tracking-wide text-sm">Word 1 of 5</span>
+            <button onclick="bcast('NAV_WORD_NEXT_OR_FLOW'); apply('NAV_WORD_NEXT_OR_FLOW');" class="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl active-pop flex items-center space-x-2 text-sm transition shadow-sm">
+              <span>Next</span> <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODULE 3: CIRCLE CORRECT WORD VIEW (Fullscreen slide) -->
+      <div id="view-circle" class="absolute inset-0 p-4 flex flex-col justify-between hidden select-none">
+        
+        <div class="flex-1 flex flex-col items-center justify-center py-2">
+          <div class="w-full max-w-lg bg-white rounded-3xl shadow-xl border border-slate-200 p-6 flex flex-col items-center">
+            
+            <div class="w-full h-[180px] rounded-2xl bg-slate-50 flex items-center justify-center p-3 mb-4 border border-slate-100 shadow-inner">
+              <div id="circle-prob-container" class="max-h-full max-w-full flex items-center justify-center">
+                <!-- Image card -->
+              </div>
+            </div>
+
+            <div class="text-xs font-fredoka font-black tracking-widest text-slate-400 mb-4 uppercase">Match correct word</div>
+
+            <!-- Large Choice Target list -->
+            <div id="circle-options-stack" class="grid grid-cols-2 gap-3.5 w-full">
+              <!-- Built programmatically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Carousel navigation -->
+        <div class="shrink-0 pb-2">
+          <div id="circle-carousel-strip" class="flex justify-center space-x-3 mb-2"></div>
+          <div class="flex justify-between items-center max-w-lg mx-auto w-full font-fredoka px-4">
+            <button onclick="bcast('NAV_WORD_PREV'); apply('NAV_WORD_PREV');" class="px-5 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-2xl active-pop flex items-center space-x-2 text-sm transition shadow-sm">
+              <i class="fa-solid fa-arrow-left"></i> <span>Prev Word</span>
+            </button>
+            <span id="circle-deck-counter" class="text-slate-500 font-extrabold tracking-wide text-sm">Word 1 of 5</span>
+            <button onclick="bcast('NAV_WORD_NEXT_OR_FLOW'); apply('NAV_WORD_NEXT_OR_FLOW');" class="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl active-pop flex items-center space-x-2 text-sm transition shadow-sm">
+              <span>Next</span> <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODULE 4: DRAG AND MATCH VIEW -->
+      <div id="view-drag" class="absolute inset-0 p-6 flex flex-col hidden select-none justify-between">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-3 shrink-0">
+          <div>
+            <span class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-black uppercase tracking-wider">Module 4</span>
+            <h2 class="font-fredoka text-2xl font-black text-slate-800 mt-1">Tap & Connect Connection Board</h2>
+          </div>
+          <button onclick="bcast('RESET_DRAG'); apply('RESET_DRAG');" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl transition active-pop">Reset Match</button>
+        </div>
+
+        <div class="flex-1 relative flex items-stretch justify-between space-x-12 px-6">
+          <svg id="drag-svg-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-10"></svg>
+          <div id="drag-left-column" class="flex flex-col justify-around flex-1 max-w-[220px] z-20 space-y-4"></div>
+          <div id="drag-right-column" class="flex flex-col justify-around flex-1 max-w-[220px] z-20 space-y-4"></div>
+        </div>
+
+        <div class="flex justify-center items-center py-4 shrink-0 font-fredoka">
+          <button onclick="bcast('SET_MOD', { mod: 'trace' }); apply('SET_MOD', { mod: 'trace' });" class="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl active-pop flex items-center space-x-2 text-sm transition shadow-sm">
+            <span>Next (Tracing)</span> <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- MODULE 5: LETTER TRACING VIEW -->
+      <div id="view-trace" class="absolute inset-0 p-6 flex flex-col hidden select-none justify-between">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-4 shrink-0">
+          <div>
+            <span class="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-black uppercase tracking-wider">Module 5</span>
+            <h2 class="font-fredoka text-2xl font-black text-slate-800 mt-1">Trace Letter <span class="active-letter-lbl">A</span></h2>
+          </div>
+          <button onclick="bcast('CLEAR_TRACE'); apply('CLEAR_TRACE');" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl transition active-pop">Clear Board</button>
+        </div>
+
+        <div class="flex-1 bg-white rounded-3xl shadow-lg border border-slate-200 relative overflow-hidden">
+          <div class="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+            <span id="tracing-bg-letter" class="text-[320px] sm:text-[400px] font-fredoka font-bold text-slate-100 select-none leading-none opacity-90 select-none">A</span>
+          </div>
+          <canvas id="tracing-canvas" class="absolute inset-0 w-full h-full cursor-crosshair z-20"></canvas>
+        </div>
+
+        <div class="flex justify-center items-center py-4 shrink-0 font-fredoka">
+          <button onclick="bcast('NAV_NEXT_LETTER_OR_FLOW'); apply('NAV_NEXT_LETTER_OR_FLOW');" class="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl active-pop flex items-center space-x-2 text-sm transition shadow-sm">
+            <span>Next (Letter <span id="trace-next-letter-lbl">B</span>)</span> <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- MODULE 6: PHONICS QUIZ -->
+      <div id="view-test" class="absolute inset-0 p-4 flex flex-col overflow-y-auto scroll-container hidden">
+        <div id="quiz-ranges-selection" class="flex-1 flex flex-col items-center justify-center py-6 hidden">
+          <div class="text-center max-w-lg mb-6 select-none">
+            <div class="inline-block px-4 py-1.5 bg-purple-100 text-purple-700 rounded-full text-xs font-black tracking-widest uppercase mb-2">Quiz Spectrum</div>
+            <h1 class="font-fredoka text-3xl font-extrabold text-slate-800">Select Character Range</h1>
+            <p class="text-slate-500 font-medium mt-1">Initializes student interactive multi-choice phonics testing sequence across selected letter blocks.</p>
+          </div>
+          <div id="ranges-deck-grid" class="grid grid-cols-2 gap-4 max-w-2xl w-full"></div>
+        </div>
+
+        <div id="quiz-active-arena" class="flex-1 flex flex-col hidden"></div>
+      </div>
+
+    </div>
+
+    <!-- 4. PERSISTENT INTERACTIVE CANVAS OVERLAY LAYER (Whiteboard Draw System) -->
+    <canvas id="universal-draw-canvas" class="absolute inset-x-0 bottom-0 top-[64px] pointer-events-none z-[80] cursor-crosshair"></canvas>
+
+    <!-- 5. REMOTE POINTER -->
+    <div id="remote-cursor" style="position: absolute; width: 22px; height: 22px; background: rgba(147, 51, 234, 0.9); border-radius: 50%; border: 2.5px solid #fff; box-shadow: 0 0 12px rgba(147, 51, 234, 0.6); pointer-events: none; z-index: 99999; transform: translate(-50%, -50%); display: none; transition: left 100ms ease-out, top 100ms ease-out;">
+      <div style="position: absolute; top: 100%; left: 100%; transform: translate(-2px, -2px); color: #9333ea; font-size: 14px; text-shadow: 1px 1px 2px black;">
+        <i class="fa-solid fa-arrow-pointer"></i>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // --- 1. MASTER ALPHABET METADATA & PHONICS DICTIONARY ---
+    const letterColors = [
+      '#e84393', '#4361ee', '#f97316', '#06d6a0', '#a855f7',
+      '#ef4444', '#0ea5e9', '#22c55e', '#f59e0b', '#ec4899',
+      '#14b8a6', '#8b5cf6', '#f43f5e', '#3b82f6', '#10b981',
+      '#d946ef', '#0891b2', '#84cc16', '#fb923c', '#6366f1',
+      '#e11d48', '#2563eb', '#16a34a', '#7c3aed', '#0284c7',
+      '#dc2626'
+    ];
+
+    const letterLabels = [
+      "aaa", "buh", "kuh", "duh", "ehh", "fff", "guh", "hhh", "iii", "juh", 
+      "kuh", "lll", "mmm", "nnn", "ohh", "puh", "kwuh", "rrr", "sss", "tuh", 
+      "uhh", "vvv", "www", "ks", "yyy", "zzz"
+    ];
+
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+    const ranges = [
+      { l: 'A–D', s: 'A', e: 'D', color: '#3b82f6' },
+      { l: 'E–H', s: 'E', e: 'H', color: '#10b981' },
+      { l: 'I–L', s: 'I', e: 'L', color: '#f59e0b' },
+      { l: 'M–P', s: 'M', e: 'P', color: '#ec4899' },
+      { l: 'Q–T', s: 'Q', e: 'T', color: '#8b5cf6' },
+      { l: 'U–X', s: 'U', e: 'X', color: '#f43f5e' },
+      { l: 'Y–Z', s: 'Y', e: 'Z', color: '#06d6a0' },
+      { l: 'A–Z', s: 'A', e: 'Z', color: '#a855f7' }
+    ];
+
+    const fallbackVocab = {
+      A: [
+        { word: "Axe" }, { word: "Alligator" }, { word: "Apple" }, { word: "Aeroplane" }, { word: "Ant" }
+      ],
+      B: [
+        { word: "Ball" }, { word: "Bee" }, { word: "Bus" }, { word: "Banana" }, { word: "Bear" }
+      ],
+      C: [
+        { word: "Cat" }, { word: "Car" }, { word: "Cake" }, { word: "Cup" }, { word: "Cow" }
+      ],
+      D: [
+        { word: "Dog" }, { word: "Duck" }, { word: "Door" }, { word: "Drum" }, { word: "Dolphin" }
+      ],
+      E: [
+        { word: "Egg" }, { word: "Elephant" }, { word: "Eagle" }, { word: "Engine" }, { word: "Elbow" }
+      ],
+      F: [
+        { word: "Fish" }, { word: "Frog" }, { word: "Fox" }, { word: "Fan" }, { word: "Flower" }
+      ],
+      G: [
+        { word: "Goat" }, { word: "Girl" }, { word: "Grapes" }, { word: "Guitar" }, { word: "Gate" }
+      ],
+      H: [
+        { word: "Hat" }, { word: "Hen" }, { word: "Horse" }, { word: "House" }, { word: "Hand" }
+      ],
+      I: [
+        { word: "Ink" }, { word: "Igloo" }, { word: "Insect" }, { word: "Island" }, { word: "Ice" }
+      ],
+      J: [
+        { word: "Jar" }, { word: "Jet" }, { word: "Jam" }, { word: "Jellyfish" }, { word: "Juice" }
+      ],
+      K: [
+        { word: "Kite" }, { word: "Key" }, { word: "Kangaroo" }, { word: "King" }, { word: "Kiwi" }
+      ],
+      L: [
+        { word: "Lion" }, { word: "Leaf" }, { word: "Lamp" }, { word: "Lock" }, { word: "Lemon" }
+      ],
+      M: [
+        { word: "Monkey" }, { word: "Moon" }, { word: "Mouse" }, { word: "Mug" }, { word: "Melon" }
+      ],
+      N: [
+        { word: "Nest" }, { word: "Net" }, { word: "Nut" }, { word: "Nose" }, { word: "Needle" }
+      ],
+      O: [
+        { word: "Owl" }, { word: "Orange" }, { word: "Octopus" }, { word: "Onion" }, { word: "Ostrich" }
+      ],
+      P: [
+        { word: "Pig" }, { word: "Pen" }, { word: "Pear" }, { word: "Pencil" }, { word: "Panda" }
+      ],
+      Q: [
+        { word: "Queen" }, { word: "Quill" }, { word: "Quilt" }, { word: "Quiz" }, { word: "Quail" }
+      ],
+      R: [
+        { word: "Ring" }, { word: "Rabbit" }, { word: "Rain" }, { word: "Rose" }, { word: "Robot" }
+      ],
+      S: [
+        { word: "Sun" }, { word: "Star" }, { word: "Snake" }, { word: "Ship" }, { word: "Spoon" }
+      ],
+      T: [
+        { word: "Train" }, { word: "Tree" }, { word: "Tiger" }, { word: "Tent" }, { word: "Tomato" }
+      ],
+      U: [
+        { word: "Umbrella" }, { word: "Unicorn" }, { word: "Urn" }, { word: "Uncle" }, { word: "Up" }
+      ],
+      V: [
+        { word: "Van" }, { word: "Vase" }, { word: "Violin" }, { word: "Volcano" }, { word: "Vulture" }
+      ],
+      W: [
+        { word: "Watch" }, { word: "Wind" }, { word: "Web" }, { word: "Whale" }, { word: "Worm" }
+      ],
+      X: [
+        { word: "Xylophone" }, { word: "X-ray" }, { word: "Box" }, { word: "Fox" }, { word: "Ox" }
+      ],
+      Y: [
+        { word: "Yo-Yo" }, { word: "Yak" }, { word: "Yacht" }, { word: "Yarn" }, { word: "Yellow" }
+      ],
+      Z: [
+        { word: "Zebra" }, { word: "Zero" }, { word: "Zipper" }, { word: "Zoo" }, { word: "Zigzag" }
+      ]
+    };
+
+    // --- 2. MULTI-USER REALTIME SYNCHRONIZED STATE CONTAINER ---
+    const ST = {
+      activeLetter: 'A',        
+      activeModule: 'know',     
+      customAssets: {},         
+      activeWordIndex: 0,       
+
+      // Whiteboard drawing status settings
+      drawOverlayActive: false,
+      inkColor: '#9333ea',
+      inkSize: 4,
+
+      // Tap-to-Connect matching module parameters
+      leftDragSelection: null,
+      activeDragMatches: [],    
+
+      // Quiz testing specific integrated sub-state
+      quizPhase: 'ranges',      
+      quizRange: null,
+      quizPool: [],
+      quizIdx: 0,
+      quizScore: { c: 0, t: 0 },
+      quizOpts: [],
+      quizSel: null,
+      quizSubmitted: false,
+      quizDone: false,
+      quizSeed: 123456
+    };
+
+    // --- 3. RESPONSIVE SCALE ADJUSTER ---
+    function applyScale() {
+      const shell = document.getElementById('app');
+      if (!shell) return;
+      const DW = 960; 
+      const s = Math.min(window.innerWidth / DW, 1);
+      
+      shell.style.width = DW + 'px';
+      shell.style.height = (window.innerHeight / s) + 'px';
+      shell.style.transform = `scale(${s})`;
+      shell.style.transformOrigin = 'top left';
+      shell.style.marginLeft = ((window.innerWidth - DW * s) / 2) + 'px';
+    }
+    window.addEventListener('resize', applyScale);
+
+    // --- 4. IMAGE BULK AUTO-CATEGORIZATION ENGINE ---
+    function handleBulkUpload(event) {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      let acceptedCount = 0;
+
+      Array.from(files).forEach(file => {
+        const originalName = file.name;
+        const rawName = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
+        const firstLetter = rawName.trim().charAt(0).toUpperCase();
+
+        if (letters.includes(firstLetter)) {
+          const reader = new FileReader();
+          reader.onload = function(readerEvent) {
+            const dataUrl = readerEvent.target.result;
+            
+            if (!ST.customAssets[firstLetter]) {
+              ST.customAssets[firstLetter] = [];
+            }
+
+            const formattedWord = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+            
+            const existingIdx = ST.customAssets[firstLetter].findIndex(a => a.word.toLowerCase() === formattedWord.toLowerCase());
+            if (existingIdx !== -1) {
+              ST.customAssets[firstLetter][existingIdx].dataUrl = dataUrl;
+            } else {
+              ST.customAssets[firstLetter].push({
+                word: formattedWord,
+                dataUrl: dataUrl
+              });
+            }
+
+            acceptedCount++;
+            if (acceptedCount === files.length) {
+              showToast(`Processed & categorized ${acceptedCount} files!`);
+              bcast('RELOAD_DYNAMIC_ASSETS', { customAssets: ST.customAssets });
+              apply('RELOAD_DYNAMIC_ASSETS', { customAssets: ST.customAssets });
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
+
+    function getVocabularyDataset(letter) {
+      const fbList = fallbackVocab[letter] || [];
+      const customList = ST.customAssets[letter] || [];
+      const unified = [];
+      
+      fbList.forEach(fb => {
+        const matchingCustom = customList.find(c => c.word.toLowerCase() === fb.word.toLowerCase());
+        unified.push({
+          word: fb.word,
+          dataUrl: matchingCustom ? matchingCustom.dataUrl : null
+        });
+      });
+
+      customList.forEach(c => {
+        if (!unified.some(u => u.word.toLowerCase() === c.word.toLowerCase())) {
+          unified.push({
+            word: c.word,
+            dataUrl: c.dataUrl
+          });
+        }
+      });
+
+      return unified.slice(0, 5); 
+    }
+
+    // --- 5. STATE BROADCAST CORE AND TRANSITIONS ---
+    function bcast(type, payload={}) {
+      window.parent.postMessage({
+        type: 'IFRAME_ACTION_TRIGGERED',
+        payload: { type, ...payload }
+      }, '*');
+    }
+
+    const Aud = (() => {
+      let audioCtx;
+      function getContext() {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        return audioCtx;
+      }
+
+      function play(letter) {
+        getContext();
+        const L = letter.toLowerCase();
+        const path = `assets/audio/${L}.mp3`;
+
+        try {
+          const audio = new Audio(path);
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(() => beep());
+          }
+        } catch {
+          beep();
+        }
+      }
+
+      function beep() {
+        const ctx = getContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+      }
+
+      function chime() {
+        const ctx = getContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.40);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.40);
+      }
+
+      function buzz() {
+        const ctx = getContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, ctx.currentTime);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.30);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.30);
+      }
+
+      return { play, chime, buzz };
+    })();
+
+    function apply(type, payload) {
+      console.log("SYNC LOGIC EVENT TYPE:", type, payload);
+
+      switch(type) {
+        case 'RELOAD_DYNAMIC_ASSETS':
+          ST.customAssets = payload.customAssets;
+          break;
+
+        case 'SET_LETTER':
+          ST.activeLetter = payload.letter;
+          ST.activeWordIndex = 0;
+          ST.activeDragMatches = [];
+          ST.leftDragSelection = null;
+          break;
+
+        case 'SET_MOD':
+          ST.activeModule = payload.mod;
+          ST.activeWordIndex = 0;
+          ST.activeDragMatches = [];
+          ST.leftDragSelection = null;
+          break;
+
+        case 'SET_WORD_INDEX':
+          ST.activeWordIndex = payload.idx;
+          break;
+
+        case 'PLAY_VOCAL':
+          Aud.play(payload.letter);
+          break;
+
+        case 'DRAG_SELECT_LEFT':
+          ST.leftDragSelection = payload.leftId;
+          break;
+
+        case 'DRAG_CONNECT':
+          ST.activeDragMatches.push({
+            leftId: payload.leftId,
+            rightId: payload.rightId
+          });
+          ST.leftDragSelection = null;
+          break;
+
+        case 'RESET_DRAG':
+          ST.activeDragMatches = [];
+          ST.leftDragSelection = null;
+          break;
+
+        case 'CLEAR_TRACE':
+          clearDrawingCanvas('tracing-canvas');
+          break;
+
+        case 'TRACE_DRAW_PATH':
+          drawRelativePathOnCanvas('tracing-canvas', payload);
+          break;
+
+        case 'UNIVERSAL_DRAW_PATH':
+          drawRelativePathOnCanvas('universal-draw-canvas', payload);
+          break;
+
+        case 'CLEAR_UNIVERSAL_DRAW':
+          clearDrawingCanvas('universal-draw-canvas');
+          break;
+
+        case 'TOGGLE_WHITEBOARD':
+          toggleWhiteboardOverlayState();
+          break;
+
+        case 'SET_INK_TOOL':
+          ST.currentTool = payload.tool;
+          updateSelectedToolHighlight();
+          break;
+
+        case 'NAV_WORD_PREV':
+          if (ST.activeWordIndex > 0) {
+            ST.activeWordIndex--;
+          } else {
+            ST.activeWordIndex = 4; 
+          }
+          break;
+
+        case 'NAV_WORD_NEXT':
+          if (ST.activeWordIndex < 4) {
+            ST.activeWordIndex++;
+          } else {
+            ST.activeWordIndex = 0; 
+          }
+          break;
+
+        case 'NAV_WORD_NEXT_OR_FLOW':
+          // Implements the True Curriculum Slide Navigation
+          if (ST.activeWordIndex < 4) {
+            ST.activeWordIndex++;
+          } else {
+            // Reaches end of the vocabulary list for current module
+            if (ST.activeModule === 'know') {
+              ST.activeModule = 'missing';
+            } else if (ST.activeModule === 'missing') {
+              ST.activeModule = 'circle';
+            } else if (ST.activeModule === 'circle') {
+              ST.activeModule = 'drag';
+            }
+            ST.activeWordIndex = 0;
+          }
+          break;
+
+        case 'NAV_NEXT_LETTER_OR_FLOW':
+          // Progression flow from tracing to the next alphabetical letter workspace
+          const currentPos = letters.indexOf(ST.activeLetter);
+          if (currentPos < letters.length - 1) {
+            ST.activeLetter = letters[currentPos + 1];
+            ST.activeModule = 'know';
+            ST.activeWordIndex = 0;
+            showToast(`Moving to Letter ${ST.activeLetter}!`);
+          } else {
+            showToast("Congratulations! You have completed the A-Z Phonics Journey!");
+          }
+          break;
+
+        // --- Integrated quiz engine actions ---
+        case 'QUIZ_GO':
+          ST.quizPhase = 'active';
+          ST.quizRange = payload.r;
+          ST.quizIdx = 0;
+          ST.quizScore = { c: 0, t: 0 };
+          ST.quizDone = false;
+          ST.quizSel = null;
+          ST.quizSubmitted = false;
+          ST.quizSeed = payload.seed;
+
+          const sCode = payload.r.s.charCodeAt(0);
+          const eCode = payload.r.e.charCodeAt(0);
+          const tempPool = [];
+          for (let i = sCode; i <= eCode; i++) {
+            tempPool.push(String.fromCharCode(i));
+          }
+
+          ST.quizPool = seededShuffle([...tempPool], payload.seed);
+          if (ST.quizPool.length > 0) {
+            ST.quizOpts = getQuestionOptions(ST.quizPool[0], payload.seed, 0);
+          }
+
+          setTimeout(() => {
+            if (ST.activeModule === 'test' && ST.quizPhase === 'active' && !ST.quizDone) {
+              Aud.play(ST.quizPool[ST.quizIdx]);
+            }
+          }, 400);
+          break;
+
+        case 'QUIZ_SEL':
+          if (!ST.quizSubmitted) {
+            ST.quizSel = payload.o;
+          }
+          break;
+
+        case 'QUIZ_SUB':
+          if (ST.quizSel && !ST.quizSubmitted) {
+            ST.quizSubmitted = true;
+            const correctLetter = ST.quizPool[ST.quizIdx];
+            const isCorrect = (ST.quizSel === correctLetter);
+            ST.quizScore.t += 1;
+            if (isCorrect) {
+              ST.quizScore.c += 1;
+              Aud.chime();
+            } else {
+              Aud.buzz();
+            }
+          }
+          break;
+
+        case 'QUIZ_NEXT':
+          if (ST.quizSubmitted) {
+            ST.quizIdx += 1;
+            ST.quizSel = null;
+            ST.quizSubmitted = false;
+
+            if (ST.quizIdx >= ST.quizPool.length) {
+              ST.quizDone = true;
+            } else {
+              ST.quizOpts = getQuestionOptions(ST.quizPool[ST.quizIdx], ST.quizSeed, ST.quizIdx);
+              setTimeout(() => {
+                if (ST.activeModule === 'test' && ST.quizPhase === 'active' && !ST.quizDone) {
+                  Aud.play(ST.quizPool[ST.quizIdx]);
+                }
+              }, 400);
+            }
+          }
+          break;
+
+        case 'QUIZ_EXIT':
+          ST.quizPhase = 'ranges';
+          ST.quizRange = null;
+          ST.quizPool = [];
+          ST.quizIdx = 0;
+          ST.quizOpts = [];
+          ST.quizSel = null;
+          ST.quizDone = false;
+          ST.quizSubmitted = false;
+          break;
+      }
+
+      render();
+    }
+
+    // Sync seed generators
+    function seededShuffle(arr, seed) {
+      let m = arr.length, t, i;
+      let x = seed;
+      const rand = () => {
+        x = Math.sin(x) * 10000;
+        return x - Math.floor(x);
+      };
+      while (m) {
+        i = Math.floor(rand() * m--);
+        t = arr[m];
+        arr[m] = arr[i];
+        arr[i] = t;
+      }
+      return arr;
+    }
+
+    function getQuestionOptions(letter, seed, idx) {
+      const all = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+      const wrong = all.filter(l => l !== letter);
+      seededShuffle(wrong, seed + idx);
+      const choices = [letter, wrong[0], wrong[1], wrong[2]];
+      seededShuffle(choices, seed + idx + 99);
+      return choices;
+    }
+
+    // Unified tracking message receivers
+    window.addEventListener('message', e => {
+      if (e.data?.type === 'EXECUTE_UNIVERSAL_ACTION') {
+        apply(e.data.action.type, e.data.action);
+      }
+      else if (e.data?.type === 'IFRAME_MOUSE_TRACK') {
+        const cursor = document.getElementById('remote-cursor');
+        if (cursor) {
+          const x = e.data.payload.x;
+          const y = e.data.payload.y;
+          if (x >= 0 && x <= 100 && y >= 0 && y <= 100) {
+            cursor.style.display = 'block';
+            cursor.style.left = x + '%';
+            cursor.style.top = y + '%';
+          } else {
+            cursor.style.display = 'none';
+          }
+        }
+      }
+    });
+
+    let lastMove = 0;
+    function sendPointer(cx, cy) {
+      const now = Date.now();
+      if (now - lastMove < 50) return;
+      lastMove = now;
+
+      const shell = document.getElementById('app');
+      if (!shell) return;
+      const rect = shell.getBoundingClientRect();
+      const pctX = ((cx - rect.left) / rect.width) * 100;
+      const pctY = ((cy - rect.top) / rect.height) * 100;
+
+      window.parent.postMessage({
+        type: 'IFRAME_MOUSE_TRACK',
+        payload: { x: pctX, y: pctY }
+      }, '*');
+    }
+
+    document.addEventListener('mousemove', e => sendPointer(e.clientX, e.clientY));
+    document.addEventListener('touchmove', e => {
+      if (e.touches.length > 0) {
+        sendPointer(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    });
+
+    // Elegant toast dispatcher
+    function showToast(message) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `px-4 py-3 rounded-xl shadow-lg font-fredoka font-semibold text-white pointer-events-auto transition-all duration-300 transform translate-x-10 opacity-0 bg-slate-800 border border-slate-700 flex items-center space-x-2 text-xs`;
+      toast.innerHTML = `
+        <i class="fa-solid fa-circle-check text-purple-400"></i>
+        <span>${message}</span>
+      `;
+      container.appendChild(toast);
+
+      setTimeout(() => toast.classList.remove('translate-x-10', 'opacity-0'), 10);
+      setTimeout(() => {
+        toast.classList.add('translate-x-10', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Centered illustration asset renderer
+    function getMediaBlock(item) {
+      if (item.dataUrl) {
+        return `<img src="${item.dataUrl}" class="max-h-[200px] sm:max-h-[240px] max-w-[280px] sm:max-w-[340px] object-contain drop-shadow-md select-none rounded-2xl" alt="${item.word}">`;
+      } else {
+        return `
+          <div class="flex flex-col items-center justify-center p-6 border-4 border-dashed border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-3xl w-60 h-44 transition-all select-none">
+            <i class="fa-solid fa-file-image text-slate-300 text-4xl mb-2"></i>
+            <span class="text-xs text-slate-400 font-bold text-center leading-tight">Drop Custom Image of<br><b class="text-purple-600 uppercase font-black">${item.word}</b></span>
+          </div>
+        `;
+      }
+    }
+
+    // Toggle Letter Grid Popup View
+    function toggleLetterGrid() {
+      const target = document.getElementById('dropdown-letter-grid');
+      if (target.classList.contains('hidden')) {
+        buildLetterGridDropdown();
+        target.classList.remove('hidden');
+      } else {
+        target.classList.add('hidden');
+      }
+    }
+
+    function buildLetterGridDropdown() {
+      const grid = document.getElementById('alphabet-grid-content');
+      grid.innerHTML = '';
+      letters.forEach(l => {
+        const btn = document.createElement('button');
+        const isActive = l === ST.activeLetter;
+        btn.className = `p-2 font-fredoka text-base rounded-xl flex items-center justify-center active-pop border ${
+          isActive 
+            ? 'bg-purple-600 text-white font-black border-purple-500 shadow-md' 
+            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+        }`;
+        btn.innerText = l;
+        btn.onclick = () => {
+          bcast('SET_LETTER', { letter: l });
+          apply('SET_LETTER', { letter: l });
+          document.getElementById('dropdown-letter-grid').classList.add('hidden');
+        };
+        grid.appendChild(btn);
+      });
+    }
+
+    function toggleOverlayToolsMenu() {
+      const panel = document.getElementById('tutor-draw-panel');
+      panel.classList.toggle('hidden');
+      updateSelectedToolHighlight();
+    }
+
+    function updateSelectedToolHighlight() {
+      const tools = ['pen', 'highlighter', 'eraser'];
+      
+      // Lazy initialize default tool if none selected
+      if (!ST.currentTool) ST.currentTool = 'pen';
+
+      tools.forEach(t => {
+        const el = document.getElementById(`tool-${t}`);
+        if (!el) return;
+
+        let icon = '';
+        let style = 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white';
+        
+        if (t === 'pen') {
+          icon = '<i class="fa-solid fa-pen"></i>';
+          if (ST.currentTool === 'pen') {
+            style = 'bg-purple-600 text-white border-purple-500 shadow-md ring-2 ring-purple-500/20';
+            ST.inkColor = '#9333ea';
+            ST.inkSize = 4;
+          }
+        } else if (t === 'highlighter') {
+          icon = '<i class="fa-solid fa-highlighter"></i>';
+          if (ST.currentTool === 'highlighter') {
+            style = 'bg-yellow-500 text-white border-yellow-400 shadow-md ring-2 ring-yellow-500/20';
+            ST.inkColor = 'rgba(234, 179, 8, 0.45)';
+            ST.inkSize = 16;
+          }
+        } else if (t === 'eraser') {
+          icon = '<i class="fa-solid fa-eraser"></i>';
+          if (ST.currentTool === 'eraser') {
+            style = 'bg-slate-700 text-white border-slate-600 shadow-md ring-2 ring-slate-700/20';
+            ST.inkSize = 24;
+          }
+        }
+
+        el.className = `w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition active-pop ${style}`;
+        el.innerHTML = icon;
+      });
+    }
+
+    // --- 6. GLOBAL RENDERING LAYER ---
+    function render() {
+      // 1. Update general visual indicator blocks
+      document.getElementById('active-letter-bubble').innerText = ST.activeLetter;
+      
+      const nextLetterPos = letters.indexOf(ST.activeLetter) + 1;
+      const traceNextLbl = document.getElementById('trace-next-letter-lbl');
+      if (traceNextLbl) {
+        traceNextLbl.innerText = nextLetterPos < letters.length ? letters[nextLetterPos] : 'End';
+      }
+
+      // 2. Synchronize navigation status indicators across bottom trail tabs
+      const modules = ['know', 'missing', 'circle', 'drag', 'trace', 'test'];
+      modules.forEach(m => {
+        const btn = document.getElementById(`trail-${m}`) || document.getElementById(`mod-${m}`);
+        const view = document.getElementById(`view-${m}`);
+        
+        if (btn) {
+          if (ST.activeModule === m) {
+            btn.className = "px-3 py-1.5 rounded-xl text-xs font-bold font-fredoka bg-purple-600 text-white shadow-md transition scale-105 ring-2 ring-purple-600/20";
+          } else {
+            btn.className = "px-3 py-1.5 rounded-xl text-xs font-bold font-fredoka text-slate-400 hover:text-white bg-slate-900 border border-slate-850 hover:bg-slate-850 transition";
+          }
+        }
+        
+        if (view) {
+          if (ST.activeModule === m) {
+            view.classList.remove('hidden');
+          } else {
+            view.classList.add('hidden');
+          }
+        }
+      });
+
+      document.querySelectorAll('.active-letter-lbl').forEach(node => {
+        node.innerText = ST.activeLetter;
+      });
+
+      // 3. Render and initialize active module specific layouts
+      switch (ST.activeModule) {
+        case 'know':
+          renderKnowWords();
+          break;
+        case 'missing':
+          renderMissingLetter();
+          break;
+        case 'circle':
+          renderCircleCorrectWord();
+          break;
+        case 'drag':
+          renderDragAndMatch();
+          break;
+        case 'trace':
+          renderTracingLetter();
+          break;
+        case 'test':
+          renderPhonicsQuiz();
+          break;
+      }
+    }
+
+    // Helper Carousel Strip Generator for full visual slides syncing
+    function renderCarouselTrackerStrip(stripId) {
+      const strip = document.getElementById(stripId);
+      if (!strip) return;
+      strip.innerHTML = '';
+
+      const items = getVocabularyDataset(ST.activeLetter);
+      items.forEach((item, index) => {
+        const bubble = document.createElement('button');
+        const isActive = index === ST.activeWordIndex;
+        
+        bubble.className = `w-12 h-12 rounded-xl border flex items-center justify-center transition active-pop shadow-sm relative overflow-hidden ${
+          isActive 
+            ? 'bg-purple-600 text-white border-purple-500 scale-110 font-bold z-10' 
+            : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
+        }`;
+
+        if (item.dataUrl) {
+          bubble.innerHTML = `<img src="${item.dataUrl}" class="w-full h-full object-cover">`;
+        } else {
+          bubble.innerHTML = `<span class="text-xs uppercase">${item.word.charAt(0)}</span>`;
+        }
+
+        bubble.onclick = () => {
+          bcast('SET_WORD_INDEX', { idx: index });
+          apply('SET_WORD_INDEX', { idx: index });
+        };
+
+        strip.appendChild(bubble);
+      });
+    }
+
+    // MODULE 1 - KNOW WORDS LOGIC
+    function renderKnowWords() {
+      const items = getVocabularyDataset(ST.activeLetter);
+      const currentItem = items[ST.activeWordIndex] || { word: "Unknown" };
+      const idx = letters.indexOf(ST.activeLetter);
+
+      document.getElementById('know-vocab-word').innerText = currentItem.word;
+      document.getElementById('know-phonics-label').innerText = letterLabels[idx] || "sound";
+      
+      const visualContainer = document.getElementById('know-visual-container');
+      visualContainer.innerHTML = getMediaBlock(currentItem);
+
+      document.getElementById('know-deck-counter').innerText = `Word ${ST.activeWordIndex + 1} of 5`;
+
+      // Draw bottom carousel indicators
+      renderCarouselTrackerStrip('know-carousel-strip');
+
+      const card = document.getElementById('know-card-trigger');
+      card.onclick = () => {
+        bcast('PLAY_VOCAL', { letter: ST.activeLetter });
+        apply('PLAY_VOCAL', { letter: ST.activeLetter });
+      };
+    }
+
+    // MODULE 2 - MISSING FIRST LETTER LOGIC
+    function renderMissingLetter() {
+      const items = getVocabularyDataset(ST.activeLetter);
+      const currentItem = items[ST.activeWordIndex] || { word: "Unknown" };
+      const restOfWord = currentItem.word.slice(1);
+
+      const probContainer = document.getElementById('missing-prob-container');
+      probContainer.innerHTML = getMediaBlock(currentItem);
+
+      document.getElementById('missing-rest-word').innerText = restOfWord;
+      document.getElementById('missing-deck-counter').innerText = `Word ${ST.activeWordIndex + 1} of 5`;
+
+      renderCarouselTrackerStrip('missing-carousel-strip');
+
+      // Options builder
+      const parent = document.getElementById('missing-options-grid');
+      parent.innerHTML = '';
+
+      const choices = [ST.activeLetter, 'B', 'M', 'T'];
+      const letterCode = ST.activeLetter.charCodeAt(0);
+      const shuffledChoices = seededShuffle([...choices], letterCode + ST.activeWordIndex);
+
+      shuffledChoices.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = "rounded-2xl py-4 text-2xl font-fredoka font-black text-center border-2 transition active-pop shadow-sm bg-slate-50 border-slate-200 hover:bg-purple-50 hover:border-purple-300 text-slate-700 hover:text-purple-600";
+        btn.innerText = opt;
+
+        btn.onclick = () => {
+          if (opt === ST.activeLetter) {
+            Aud.chime();
+            showToast("Correct! Awesome job.");
+          } else {
+            Aud.buzz();
+            showToast("Try again!");
+          }
+        };
+
+        parent.appendChild(btn);
+      });
+    }
+
+    // MODULE 3 - CIRCLE CORRECT WORD LOGIC
+    function renderCircleCorrectWord() {
+      const items = getVocabularyDataset(ST.activeLetter);
+      const currentItem = items[ST.activeWordIndex] || { word: "Unknown" };
+
+      const probContainer = document.getElementById('circle-prob-container');
+      probContainer.innerHTML = getMediaBlock(currentItem);
+
+      document.getElementById('circle-deck-counter').innerText = `Word ${ST.activeWordIndex + 1} of 5`;
+
+      renderCarouselTrackerStrip('circle-carousel-strip');
+
+      const parent = document.getElementById('circle-options-stack');
+      parent.innerHTML = '';
+
+      const wrongOpts = ["Banana", "Cat", "Monkey", "Sun"];
+      const choices = [currentItem.word, wrongOpts[0], wrongOpts[1], wrongOpts[2]];
+      const shuffled = seededShuffle([...choices], currentItem.word.charCodeAt(0) + ST.activeWordIndex);
+
+      shuffled.forEach(opt => {
+        const row = document.createElement('button');
+        row.className = "w-full rounded-2xl py-4 px-6 text-base font-fredoka font-bold border-2 transition text-center active-pop shadow-sm bg-slate-50 border-slate-200 text-slate-700 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-600";
+        row.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold tracking-wide">${opt}</span>
+            <div class="w-5 h-5 rounded-full border border-slate-300 bg-white"></div>
+          </div>
+        `;
+
+        row.onclick = () => {
+          if (opt === currentItem.word) {
+            Aud.chime();
+            showToast("Splendid! That is correct.");
+          } else {
+            Aud.buzz();
+            showToast("Incorrect! Keep trying.");
+          }
+        };
+
+        parent.appendChild(row);
+      });
+    }
+
+    // MODULE 4 - TAP-TO-CONNECT DRAG MATCH LOGIC
+    function renderDragAndMatch() {
+      const items = getVocabularyDataset(ST.activeLetter).slice(0, 3); 
+      
+      const leftCol = document.getElementById('drag-left-column');
+      const rightCol = document.getElementById('drag-right-column');
+      leftCol.innerHTML = '';
+      rightCol.innerHTML = '';
+
+      if (items.length < 3) {
+        leftCol.innerHTML = `<div class="text-xs text-slate-400">Add 3 images first.</div>`;
+        rightCol.innerHTML = '';
+        return;
+      }
+
+      const codeIndex = ST.activeLetter.charCodeAt(0);
+      const leftItems = [...items];
+      const rightItems = seededShuffle([...items], codeIndex + 12);
+
+      // Left Column cards are now larger (300px visual equivalents)
+      leftItems.forEach((item, index) => {
+        const id = `left-${index}`;
+        const node = document.createElement('div');
+        
+        const isSelected = ST.leftDragSelection === id;
+        const isLinked = ST.activeDragMatches.some(m => m.leftId === id);
+
+        node.id = id;
+        node.className = `p-4 rounded-3xl border-4 shadow-md flex items-center justify-center cursor-pointer h-[120px] transition duration-150 ${
+          isLinked 
+            ? 'bg-emerald-50 border-emerald-500 opacity-80' 
+            : isSelected 
+              ? 'bg-purple-50 border-purple-500 ring-4 ring-purple-100 scale-102 shadow-lg' 
+              : 'bg-white border-slate-200 hover:border-slate-300'
+        }`;
+
+        if (item.dataUrl) {
+          node.innerHTML = `<img src="${item.dataUrl}" class="max-h-full max-w-[120px] object-contain pointer-events-none" alt="">`;
+        } else {
+          node.innerHTML = `
+            <div class="flex flex-col items-center justify-center text-center">
+              <span class="text-xs text-slate-400 font-fredoka font-black uppercase leading-none">${item.word}</span>
+            </div>
+          `;
+        }
+
+        node.onclick = () => {
+          if (isLinked) return;
+          bcast('DRAG_SELECT_LEFT', { leftId: id });
+          apply('DRAG_SELECT_LEFT', { leftId: id });
+        };
+
+        leftCol.appendChild(node);
+      });
+
+      // Right Column text cards are also larger
+      rightItems.forEach((item, index) => {
+        const originalLeftIndex = leftItems.findIndex(i => i.word === item.word);
+        const correctLeftId = `left-${originalLeftIndex}`;
+        const id = `right-${index}`;
+
+        const node = document.createElement('button');
+        const isLinked = ST.activeDragMatches.some(m => m.rightId === id);
+
+        node.id = id;
+        node.className = `p-4 rounded-3xl border-4 font-fredoka text-xl font-extrabold text-center h-[120px] shadow-md transition duration-150 ${
+          isLinked 
+            ? 'bg-emerald-50 border-emerald-500 text-emerald-800' 
+            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 hover:border-slate-300'
+        }`;
+        node.innerText = item.word;
+
+        node.onclick = () => {
+          if (isLinked || !ST.leftDragSelection) return;
+          
+          if (ST.leftDragSelection === correctLeftId) {
+            bcast('DRAG_CONNECT', { leftId: ST.leftDragSelection, rightId: id });
+            apply('DRAG_CONNECT', { leftId: ST.leftDragSelection, rightId: id });
+            Aud.chime();
+            showToast("Linked successfully!");
+          } else {
+            Aud.buzz();
+            showToast("Mismatched item, try another combination!");
+          }
+        };
+
+        rightCol.appendChild(node);
+      });
+
+      setTimeout(() => updateConnectorVectors(leftItems, rightItems), 50);
+    }
+
+    function updateConnectorVectors(leftList, rightList) {
+      const svg = document.getElementById('drag-svg-canvas');
+      if (!svg) return;
+      svg.innerHTML = '';
+
+      ST.activeDragMatches.forEach(match => {
+        const leftEl = document.getElementById(match.leftId);
+        const rightEl = document.getElementById(match.rightId);
+
+        if (leftEl && rightEl) {
+          const svgRect = svg.getBoundingClientRect();
+          const leftRect = leftEl.getBoundingClientRect();
+          const rightRect = rightEl.getBoundingClientRect();
+
+          const x1 = leftRect.right - svgRect.left;
+          const y1 = (leftRect.top + leftRect.height / 2) - svgRect.top;
+          const x2 = rightRect.left - svgRect.left;
+          const y2 = (rightRect.top + rightRect.height / 2) - svgRect.top;
+
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.setAttribute("x1", x1);
+          line.setAttribute("y1", y1);
+          line.setAttribute("x2", x2);
+          line.setAttribute("y2", y2);
+          line.setAttribute("stroke", "#10b981");
+          line.setAttribute("stroke-width", "6");
+          line.setAttribute("stroke-linecap", "round");
+          line.setAttribute("class", "animate-pulse");
+          svg.appendChild(line);
+        }
+      });
+    }
+
+    // MODULE 5 - LETTER TRACING LAYER LOGIC
+    function renderTracingLetter() {
+      document.getElementById('tracing-bg-letter').innerText = ST.activeLetter;
+      const canvas = document.getElementById('tracing-canvas');
+      if (canvas && canvas.width !== canvas.offsetWidth) {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+      }
+    }
+
+    // MODULE 6 - PHONICS QUIZ
+    function renderPhonicsQuiz() {
+      const rangeView = document.getElementById('quiz-ranges-selection');
+      const activeView = document.getElementById('quiz-active-arena');
+
+      if (ST.quizPhase === 'ranges') {
+        rangeView.classList.remove('hidden');
+        activeView.classList.add('hidden');
+        buildQuizRanges();
+      } else {
+        rangeView.classList.add('hidden');
+        activeView.classList.remove('hidden');
+        buildQuizArena();
+      }
+    }
+
+    function buildQuizRanges() {
+      const parent = document.getElementById('ranges-deck-grid');
+      parent.innerHTML = '';
+
+      ranges.forEach(r => {
+        const btn = document.createElement('button');
+        btn.className = "rounded-3xl p-6 text-white font-fredoka text-3xl font-extrabold shadow-md transform transition duration-150 active-pop hover:scale-102 flex flex-col items-center justify-center space-y-2 border-b-4 border-black/15";
+        btn.style.backgroundColor = r.color;
+        
+        const count = r.e.charCodeAt(0) - r.s.charCodeAt(0) + 1;
+        btn.innerHTML = `
+          <span>${r.l}</span>
+          <span class="text-xs font-black uppercase tracking-widest text-white/80 bg-black/15 px-3 py-1 rounded-full">${count} Letters</span>
+        `;
+
+        btn.onclick = () => {
+          const randSeed = Math.floor(Math.random() * 100000);
+          bcast('QUIZ_GO', { r, seed: randSeed });
+          apply('QUIZ_GO', { r, seed: randSeed });
+        };
+
+        parent.appendChild(btn);
+      });
+    }
+
+    function buildQuizArena() {
+      const arena = document.getElementById('quiz-active-arena');
+      arena.innerHTML = '';
+
+      if (ST.quizDone) {
+        const pct = Math.round((ST.quizScore.c / ST.quizScore.t) * 100) || 0;
+        let badge = "Phonics Starter 🥉";
+        let icon = "🎒";
+        
+        if (pct >= 90) {
+          badge = "Phonics Legend! 🏆";
+          icon = "🎉";
+        } else if (pct >= 70) {
+          badge = "Phonics Expert 🥈";
+          icon = "🌟";
+        }
+
+        arena.innerHTML = `
+          <div class="flex-1 flex flex-col items-center justify-center py-8 px-4 text-center font-fredoka">
+            <div class="text-7xl mb-4 animate-bounce">${icon}</div>
+            <h2 class="text-3xl font-black text-slate-800">Quiz Complete!</h2>
+            <p class="text-slate-500 font-medium max-w-sm mt-1">Excellent performance. Keep mastering phonics sounds!</p>
+
+            <div class="my-6 bg-white rounded-3xl shadow-lg border border-slate-100 p-8 w-full max-w-sm flex flex-col items-center space-y-3">
+              <span class="text-xs text-slate-400 font-black tracking-widest uppercase">Scorecard</span>
+              <div class="text-6xl font-black text-purple-600">${ST.quizScore.c} / ${ST.quizScore.t}</div>
+              <div class="text-xl font-bold text-slate-700">${pct}% Answers Correct</div>
+              <span class="px-4 py-1.5 bg-purple-100 text-purple-700 text-xs font-black uppercase rounded-full tracking-wider mt-4">
+                ${badge}
+              </span>
+            </div>
+
+            <button onclick="bcast('QUIZ_EXIT'); apply('QUIZ_EXIT');" class="px-8 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-fredoka font-bold rounded-2xl shadow-md active-pop">
+              Back to Ranges
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      const correctLetter = ST.quizPool[ST.quizIdx];
+      const isSubmitted = ST.quizSubmitted;
+
+      const topRow = document.createElement('div');
+      topRow.className = "flex items-center justify-between font-fredoka pb-4 border-b border-slate-200 shrink-0 select-none";
+      topRow.innerHTML = `
+        <button onclick="bcast('QUIZ_EXIT'); apply('QUIZ_EXIT');" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold transition flex items-center space-x-2 text-sm active-pop">
+          <i class="fa-solid fa-circle-xmark"></i> <span>Leave Quiz</span>
+        </button>
+        <div class="px-4 py-2 bg-purple-100 text-purple-700 rounded-xl font-black text-sm tracking-wider uppercase">
+          Score: ${ST.quizScore.c} / ${ST.quizScore.t}
+        </div>
+      `;
+      arena.appendChild(topRow);
+
+      const banner = document.createElement('div');
+      banner.className = "text-center text-[10px] text-slate-400 font-black tracking-widest uppercase mt-4 select-none";
+      banner.innerText = `Question ${ST.quizIdx + 1} / ${ST.quizPool.length}`;
+      arena.appendChild(banner);
+
+      const audioPresenter = document.createElement('div');
+      audioPresenter.className = "flex flex-col items-center justify-center py-6 space-y-4 shrink-0 select-none";
+      
+      const audioBtn = document.createElement('button');
+      audioBtn.className = "w-20 h-20 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center shadow-xl hover:scale-105 active-pop transition focus:outline-none relative ring-4 ring-purple-100";
+      audioBtn.innerHTML = `<i class="fa-solid fa-volume-high text-3xl animate-pulse"></i>`;
+      audioBtn.onclick = () => {
+        bcast('PLAY_VOCAL', { letter: correctLetter });
+        apply('PLAY_VOCAL', { letter: correctLetter });
+      };
+      audioPresenter.appendChild(audioBtn);
+
+      const hintText = document.createElement('div');
+      hintText.className = "text-center text-xs text-slate-400 font-semibold";
+      hintText.innerHTML = `🔊 Play sound cue · Select correct matching character below`;
+      audioPresenter.appendChild(hintText);
+      arena.appendChild(audioPresenter);
+
+      const choicesBlock = document.createElement('div');
+      choicesBlock.className = "flex-1 flex flex-col justify-center space-y-3 max-w-md mx-auto w-full py-2";
+
+      ST.quizOpts.forEach(opt => {
+        const optionRow = document.createElement('div');
+        optionRow.className = "flex items-center justify-between border-2 rounded-2xl p-4 transition-all duration-150 cursor-pointer select-none relative";
+
+        const isSelected = (ST.quizSel === opt);
+        const isCorrectChoice = (opt === correctLetter);
+
+        let borderStyle = "border-slate-200 bg-white hover:border-slate-300";
+        let textStyle = "text-slate-700";
+        let marker = `<div class="w-6 h-6 rounded-full border-2 border-slate-300"></div>`;
+
+        if (isSubmitted) {
+          if (isCorrectChoice) {
+            borderStyle = "border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-100";
+            textStyle = "text-emerald-800 font-bold";
+            marker = `<div class="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] shadow-sm"><i class="fa-solid fa-check"></i></div>`;
+          } else if (isSelected) {
+            borderStyle = "border-rose-500 bg-rose-50/70 ring-2 ring-rose-100";
+            textStyle = "text-rose-800 font-bold";
+            marker = `<div class="w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center text-[10px] shadow-sm"><i class="fa-solid fa-xmark"></i></div>`;
+          } else {
+            borderStyle = "border-slate-100 bg-white opacity-40 pointer-events-none";
+            textStyle = "text-slate-400";
+          }
+        } else if (isSelected) {
+          borderStyle = "border-purple-500 bg-purple-50 ring-2 ring-purple-100";
+          textStyle = "text-purple-900 font-bold";
+          marker = `<div class="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs shadow-md"><div class="w-2.5 h-2.5 bg-white rounded-full"></div></div>`;
+        }
+
+        optionRow.className += ` ${borderStyle} ${textStyle}`;
+
+        const rowSpk = document.createElement('button');
+        rowSpk.className = "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs shadow-sm transform active-pop hover:brightness-105 shrink-0";
+        const codeIdx = letters.indexOf(opt);
+        rowSpk.style.backgroundColor = letterColors[codeIdx] || '#6366f1';
+        rowSpk.innerHTML = `<i class="fa-solid fa-volume-low"></i>`;
+        rowSpk.onclick = (e) => {
+          e.stopPropagation();
+          bcast('PLAY_VOCAL', { letter: opt });
+          apply('PLAY_VOCAL', { letter: opt });
+        };
+
+        const detailsText = document.createElement('div');
+        detailsText.className = "flex-1 ml-4 text-left flex items-center justify-between";
+
+        const vocabSet = getVocabularyDataset(opt);
+        const correctVocab = vocabSet[0] || { word: "Unknown" };
+
+        detailsText.innerHTML = `
+          <span class="font-fredoka text-lg text-slate-700">
+            Letter <span class="font-extrabold text-2xl">${opt}</span> <span class="text-sm text-slate-400">(${correctVocab.word})</span>
+          </span>
+          <div class="w-8 h-8 flex items-center justify-center relative mr-3">
+            ${correctVocab.dataUrl 
+              ? `<img src="${correctVocab.dataUrl}" class="absolute inset-0 w-full h-full object-contain">` 
+              : `<span class="text-lg font-black text-purple-400">${opt}</span>`
+            }
+          </div>
+        `;
+
+        optionRow.appendChild(rowSpk);
+        optionRow.appendChild(detailsText);
+        
+        const containerNode = document.createElement('div');
+        containerNode.innerHTML = marker;
+        optionRow.appendChild(containerNode);
+
+        optionRow.onclick = () => {
+          if (!isSubmitted) {
+            bcast('QUIZ_SEL', { o: opt });
+            apply('QUIZ_SEL', { o: opt });
+          }
+        };
+
+        choicesBlock.appendChild(optionRow);
+      });
+
+      arena.appendChild(choicesBlock);
+
+      const controlsPanel = document.createElement('div');
+      controlsPanel.className = "pt-4 pb-2 text-center font-fredoka shrink-0 mt-auto";
+
+      const primaryBtn = document.createElement('button');
+      if (!isSubmitted) {
+        primaryBtn.disabled = !ST.quizSel;
+        primaryBtn.className = `w-full max-w-xs py-3 px-8 rounded-2xl font-bold text-lg shadow-md transition transform ${
+          ST.quizSel
+            ? 'bg-purple-600 text-white hover:bg-purple-700 hover:-translate-y-0.5 active-pop cursor-pointer border-b-4 border-purple-800'
+            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+        }`;
+        primaryBtn.innerText = "Confirm Answer ✔";
+        primaryBtn.onclick = () => {
+          bcast('QUIZ_SUB');
+          apply('QUIZ_SUB');
+        };
+      } else {
+        primaryBtn.className = "w-full max-w-xs py-3 px-8 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-lg shadow-md transition transform hover:-translate-y-0.5 active-pop cursor-pointer border-b-4 border-slate-950";
+        const isQuizEnd = (ST.quizIdx === ST.quizPool.length - 1);
+        primaryBtn.innerText = isQuizEnd ? "Finish Quiz 🏁" : "Next Question ▶";
+        primaryBtn.onclick = () => {
+          bcast('QUIZ_NEXT');
+          apply('QUIZ_NEXT');
+        };
+      }
+
+      controlsPanel.appendChild(primaryBtn);
+      arena.appendChild(controlsPanel);
+    }
+
+    // --- 7. DYNAMIC DRAWING CANVAS ARCHITECTURE ---
+    let activeDrawingPoints = { tracing: false, universal: false };
+
+    function initializeDrawingSystems() {
+      setupCanvasDrawInteraction('tracing-canvas', 'tracing', 'TRACE_DRAW_PATH');
+      setupCanvasDrawInteraction('universal-draw-canvas', 'universal', 'UNIVERSAL_DRAW_PATH');
+    }
+
+    function setupCanvasDrawInteraction(canvasId, trackFlag, bcastEventName) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      const getCoords = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        return {
+          px: ((clientX - rect.left) / rect.width) * 100,
+          py: ((clientY - rect.top) / rect.height) * 100
+        };
+      };
+
+      let lastX = 0;
+      let lastY = 0;
+
+      const startDraw = (e) => {
+        activeDrawingPoints[trackFlag] = true;
+        const coords = getCoords(e);
+        lastX = coords.px;
+        lastY = coords.py;
+      };
+
+      const drawAction = (e) => {
+        if (!activeDrawingPoints[trackFlag]) return;
+        const coords = getCoords(e);
+
+        const payload = {
+          x1: lastX,
+          y1: lastY,
+          x2: coords.px,
+          y2: coords.py,
+          color: ST.currentTool === 'eraser' ? '#ffffff' : ST.inkColor, // Eraser matches target canvas background
+          size: ST.inkSize
+        };
+
+        bcast(bcastEventName, payload);
+        apply(bcastEventName, payload);
+
+        lastX = coords.px;
+        lastY = coords.py;
+      };
+
+      const stopDraw = () => {
+        activeDrawingPoints[trackFlag] = false;
+      };
+
+      canvas.addEventListener('mousedown', startDraw);
+      canvas.addEventListener('mousemove', drawAction);
+      canvas.addEventListener('mouseup', stopDraw);
+      canvas.addEventListener('mouseleave', stopDraw);
+
+      canvas.addEventListener('touchstart', startDraw, { passive: true });
+      canvas.addEventListener('touchmove', drawAction, { passive: true });
+      canvas.addEventListener('touchend', stopDraw, { passive: true });
+    }
+
+    function drawRelativePathOnCanvas(canvasId, path) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      const x1 = (path.x1 / 100) * canvas.width;
+      const y1 = (path.y1 / 100) * canvas.height;
+      const x2 = (path.x2 / 100) * canvas.width;
+      const y2 = (path.y2 / 100) * canvas.height;
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      
+      // Support transparent masking overlays via standard source composition modes
+      if (path.color === '#ffffff' && canvasId === 'universal-draw-canvas') {
+        ctx.globalCompositeOperation = 'destination-out';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      ctx.strokeStyle = path.color;
+      ctx.lineWidth = path.size;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      
+      // Reset composition state
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    function clearDrawingCanvas(canvasId) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function toggleWhiteboardOverlayState() {
+      ST.drawOverlayActive = !ST.drawOverlayActive;
+      const overlay = document.getElementById('universal-draw-canvas');
+      const btn = document.getElementById('draw-overlay-toggle');
+      const statusTxt = document.getElementById('draw-status-txt');
+
+      if (ST.drawOverlayActive) {
+        overlay.classList.remove('pointer-events-none');
+        overlay.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
+        overlay.width = overlay.offsetWidth;
+        overlay.height = overlay.offsetHeight;
+        
+        btn.className = "px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold border border-purple-500 transition flex items-center space-x-1";
+        statusTxt.innerText = "Ink Overlay: On";
+        showToast("Ink Overlay Mode turned ON!");
+      } else {
+        overlay.classList.add('pointer-events-none');
+        overlay.style.backgroundColor = 'transparent';
+        
+        btn.className = "px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold border border-slate-700 transition flex items-center space-x-1";
+        statusTxt.innerText = "Ink Overlay: Off";
+        
+        clearDrawingCanvas('universal-draw-canvas');
+        showToast("Ink Overlay Mode turned OFF.");
+      }
+    }
+
+    // Initialize systems on load
+    window.onload = () => {
+      applyScale();
+      render();
+      initializeDrawingSystems();
+    };
+  </script>
+</body>
+</html>

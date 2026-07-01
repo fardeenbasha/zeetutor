@@ -68,7 +68,7 @@
             }, '*');
         }, true);
 
-        // UNIVERSAL INPUT SENDER TRACKER (Crucial Fix for Custom Inputs Sync)
+        // UNIVERSAL INPUT SENDER TRACKER (Fixes desyncs inside Custom Input builders)
         document.addEventListener('input', (e) => {
             if (e.isTrusted === false || window.isSimulating) return;
             const target = e.target;
@@ -127,7 +127,16 @@
                     return;
                 }
 
-                // EXPLICIT STATE SYNCHRONIZATION (Bypasses laggy input field text sync)
+                // EXPLICIT STATE SYNCHRONIZATION (Bypasses selector click dependencies on stale DOM screens)
+                if (action.type === 'SYNC_SCREEN') {
+                    window.isSimulating = true;
+                    if (action.screen === 'custom_input') {
+                        renderCustomInputScreen(action.mode);
+                    }
+                    setTimeout(() => { window.isSimulating = false; }, 50);
+                    return;
+                }
+
                 if (action.type === 'GENERATE_CUSTOM_WORD') {
                     window.isSimulating = true;
                     const lettersArray = action.word.split('');
@@ -496,6 +505,19 @@
             DockView.innerHTML = '';
             clearDragGhost();
 
+            // EXPLICIT SCREEN SYNC (Updates Student Screen State)
+            if (!window.isSimulating) {
+                window.parent.postMessage({
+                    type: 'IFRAME_ACTION_TRIGGERED',
+                    payload: {
+                        type: 'SYNC_SCREEN',
+                        screen: 'custom_input',
+                        mode: mode,
+                        actionId: 'screen_' + Date.now()
+                    }
+                }, '*');
+            }
+
             let headerText = "";
             let inputFieldsHtml = "";
             
@@ -562,7 +584,12 @@
             if (!window.isSimulating) {
                 window.parent.postMessage({
                     type: 'IFRAME_ACTION_TRIGGERED',
-                    payload: { type: 'GENERATE_CUSTOM_WORD', mode: mode, word: rawWord }
+                    payload: { 
+                        type: 'GENERATE_CUSTOM_WORD', 
+                        mode: mode, 
+                        word: rawWord,
+                        actionId: 'word_' + Date.now()
+                    }
                 }, '*');
             }
 
@@ -596,7 +623,12 @@
             if (!window.isSimulating) {
                 window.parent.postMessage({
                     type: 'IFRAME_ACTION_TRIGGERED',
-                    payload: { type: 'GENERATE_CUSTOM_NUM', start: start, end: end }
+                    payload: { 
+                        type: 'GENERATE_CUSTOM_NUM', 
+                        start: start, 
+                        end: end,
+                        actionId: 'num_' + Date.now()
+                    }
                 }, '*');
             }
 
